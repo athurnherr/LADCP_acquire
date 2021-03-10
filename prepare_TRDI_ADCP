@@ -1,0 +1,62 @@
+#!/usr/bin/expect -f
+#======================================================================
+#                    P R E P A R E _ I N S T R U M E N T 
+#                    doc: Wed Nov 15 00:54:23 2006
+#                    dlm: Thu Aug 26 00:27:24 2010
+#                    (c) 2006 ladder@
+#                    uE-Info: 25 39 NIL 0 0 72 2 2 8 NIL ofnI
+#======================================================================
+
+# HISTORY:
+#  Nov 15, 2006: - adapted from [ladcp_send_command]
+#  Nov 17, 2006: - finished implementation
+#  Oct 22, 2007: - added sleep 3 after BREAK for HP heads
+#  Oct 23, 2007: - cosmetics
+#  Nov 19, 2008: - added version
+#  Aug 25, 2010: - DEFAULTS.expect -> CRUISE_SETUP.expect
+#		 - libBB.expect -> libRDI.expect
+
+#----------------------------------------------------------------------
+# Setup
+#----------------------------------------------------------------------
+
+log_user 0;
+source CRUISE_SETUP.expect;
+regsub {dir1} [exec which dir1] {libRDI.expect} path;
+source $path;
+
+print_version;
+
+if {$argc != 1} {
+	error "Usage: $argv0 <tty port>"
+}
+
+#----------------------------------------------------------------------
+# Set Speed to 9600bps
+#----------------------------------------------------------------------
+
+set_color;
+send_user "Resetting instrument speed";
+spawn bbabble -ms [lindex $argv 0];
+wait_for_startup;
+
+send $BREAK;
+sleep 3;
+
+next_speed; send_error ".";	#  19200
+next_speed; send_error ".";	#  38400
+next_speed; send_error ".";	#  57600
+next_speed; send_error ".";	# 115200
+next_speed; send_error ".";	#    300
+next_speed; send_error ".";	#   1200
+next_speed; send_error ".";	#   2400
+next_speed; send_error ".";	#   4800
+next_speed; send_error ".";	#   9600
+
+save_parameters;
+
+send_user "\nInstrument Serial Number = ";
+send_user [get_serial_number];
+
+put_to_sleep;
+send_user "\nDone\n";

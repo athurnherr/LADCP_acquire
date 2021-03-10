@@ -1,0 +1,108 @@
+#!/usr/bin/expect -f
+#======================================================================
+#                    L A D C P _ S E N D _ C M D 
+#                    doc: Wed Mar 10 22:23:52 2004
+#                    dlm: Thu Aug 26 00:27:20 2010
+#                    (c) 2004 A.M. Thurnherr
+#                    uE-Info: 25 39 NIL 0 0 72 2 2 8 NIL ofnI
+#======================================================================
+
+# HISTORY:
+#  Apr  4, 2004: - adapted from [ladcp1]
+#  Feb 14, 2006: - BUG: log files were written to bin dir
+#  Nov  6, 2006: - adapted to old regsub
+#  Nov 19, 2008: - adapted to new firmware behavior (load_factory_defaults)
+#  Nov 19, 2008: - added version
+#  Aug 25, 2010: - DEFAULTS.expect -> CRUISE_SETUP.expect
+#		 - libBB.expect -> libRDI.expect
+
+#----------------------------------------------------------------------
+# Setup
+#----------------------------------------------------------------------
+
+log_user 0;
+source CRUISE_SETUP.expect;
+regsub {dir1} [exec which dir1] {libRDI.expect} path;
+source $path;
+
+print_version;
+
+if {$argc != 2} {
+	error "Usage: $argv0 <tty port> <cmd-file>"
+}
+if {![file isfile [lindex $argv 1]]} {
+	error "[lindex $argv 1]: no such file"
+}
+
+set ask 1;
+if {[file isfile .last_stn]} {
+	set stn [format $stn_format [expr [exec cat .last_stn] + 1]];
+	if {[affirm "Use station number $stn? (y/N) " 10]} {
+		set ask 0;
+	}
+}
+if {$ask == 1} {
+	set stn [format $stn_format [input_int "Station number = "]];
+}
+
+if ![file isdirectory $raw_dir] {
+	error "directory $raw_dir does not exist";
+}
+set cast_dir [format %s/%s $raw_dir $stn];
+if [file isdirectory $cast_dir] {
+	error "data directory $cast_dir already exists!";
+}
+set prev_cast_dir [format %s/%s $raw_dir [expr $stn - 1]];
+if {![file isdirectory $prev_cast_dir]} {
+	if {![affirm "WARNING: previous-station data directory $prev_cast_dir does not exist --- are you sure the station number $stn is ok? (y/N) " 10]} {
+		send_error "$argv0 aborted\n";
+		exit 0;
+	}
+}
+
+#----------------------------------------------------------------------
+# Deploy LADCP
+#----------------------------------------------------------------------
+
+set_color;
+send_user "Connecting to instrument...";
+spawn bbabble -ms [lindex $argv 0];
+wait_for_startup;
+reset_instrument;
+if {![memory_empty]} {
+	if {![affirm "\nWARNING: Memory is not empty; continue anyway? (y/N) " 10 1]} {
+		send_user "Putting instrument to sleep...";
+		put_to_sleep;
+		send_user "\nDone\n";
+		exit;
+	}
+} else {
+	send_user "\n";
+}
+
+exec mkdir $cast_dir;
+exec cp [lindex $argv 1] $cast_dir;
+exec echo $stn > .last_stn;
+cd $cast_dir;
+
+if {![file isfile [lindex $argv 1]]} {
+	error "Failed to copy [lindex $argv 1] to [pwd]";
+}
+
+regsub {.*/} $argv0 {} basename;
+start_logging [format %s_%03d.log $basename $stn];
+
+send_user "Resetting instrument to factory defaults...";
+load_factory_defaults;
+
+send_user "Setting instrument clock...";
+set_computer_time;
+set_instrument_clock;
+
+send_user "\nSetting deployment name...";
+set_deployment_name [format $master_deployment_name_fmt $stn];
+
+send_user "\nUploading command file";
+upload_file [lindex $argv 1] [format %s_log [lindex $argv 1]] "DEPLOY.hwconfig";
+
+send_user "\nDone\n";

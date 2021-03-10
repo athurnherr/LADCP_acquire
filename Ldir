@@ -1,0 +1,23 @@
+#!/usr/bin/expect -f
+#======================================================================
+#                    L D I R 
+#                    doc: Sun Mar  7 16:18:07 2021
+#                    dlm: Wed Mar 10 15:20:46 2021
+#                    (c) 2021 A.M. Thurnherr
+#                    uE-Info: 13 26 NIL 0 0 72 2 2 4 NIL ofnI
+#======================================================================
+
+# HISTORY:
+#  Mar  7, 2021: - created from old [dir2]
+#  Mar  8, 2021: - made it work
+#  Mar 10, 2021: - renamed
+
+source [regsub {Ldir} [exec which Ldir] {libacquire2.expect}];
+
+log_user 0;
+init_acquire;
+send_user "Connecting...";
+connect_to_instruments;
+wakeup_instruments;
+list_dir;
+shutdown_instruments;

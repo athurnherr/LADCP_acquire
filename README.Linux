@@ -1,0 +1,105 @@
+======================================================================
+                    R E A D M E . L I N U X 
+                    doc: Thu Jan 19 09:43:38 2006
+                    dlm: Fri Dec 10 15:24:48 2010
+                    (c) 2006 A.M. Thurnherr
+                    uE-Info: 91 0 NIL 0 0 72 3 2 4 NIL ofnI
+======================================================================
+
+This file contains Linux-specific notes for installing and running the
+LDEO LADCP operator scripts.
+
+======================================================================
+PREREQUISITE SOFTWARE
+======================================================================
+
+-------
+1. perl
+-------
+
+perl is part of most standard Linux installations. See Linux
+documentation on how to install missing software. In order to test it,
+run
+
+/usr/bin/perl -e 'use threads'
+
+If perl is not in /usr/bin, the 1st line of [bbabble] has to be
+modified. 
+
+
+------
+2. gcc
+------
+
+gcc, a C pre-processor, is part of all Linux distributions, as far as I
+am aware. In order to test it, run
+
+gcc -E /usr/include/stdio.h > /dev/null
+
+If you don't have gcc installed you'll have to modify [bbabble]. This is
+for perl/system programming experts only.
+
+
+---------
+3. rb/lrb
+---------
+
+[l]rb is the receiver-component of a public-domain implementation of
+the ymodem protocol called lrzsz. It exists as modules for most popular
+Linux distributions. Alternatively, the source can be downloaded from
+http://www.ohse.de/uwe/software/lrzsz.html. However, since the version
+has not changed since December 1998 (version 0.12.20) the corresponding
+tar file (lrzsz-0.12.20.tar.gz) is included in this directory.
+
+In order to test whether lrb is already installed, at least one of the
+following commands must work:
+
+lrb --help
+rb --help
+
+Otherwise, you must install lrb. The following commands might work:
+
+tar xfz lrzsz-0.12.20.tar.gz
+cd lrzsz-0.12.20
+./configure
+make
+sudo make install
+
+
+---------
+4. expect
+---------
+
+expect is part of most Linux distributions, I think. In order to test
+it, run
+
+/usr/bin/expect < /dev/null
+
+If expect does not reside in /usr/bin, you'll have to edit all the
+operator scripts (grep -l /usr/bin/expect *).
+
+
+-------------------
+5. mkProfile/scanbb
+-------------------
+
+mkProfile is part of the LADCP_perl-tools collection available
+from the LDEO LADCP repository. 
+
+scanbb is part of Eric Firing's LADCP processing software, which is
+available from http://moli.soest.hawaii.edu/software/ladcp.
+
+If neither mkProfile nor scanbb are available, LADCP-data-file checking
+can be disabled by modifying the procedure check_data in
+[CRUISE_SETUP.expect]. This is not recommended, however.
+
+
+======================================================================
+TTY DEVICE NAMES
+======================================================================
+
+The native RS-232 tty devices in Linux are called /dev/ttyS0,
+/dev/ttyS1, ...  Most modern computers do not have multiple RS-232
+ports the ADCP heads will most likely be connected to the acquisition
+computer via USB-to-serial converters. The ones that we use at LDEO
+have tty device names /dev/ttyUSB0, /dev/ttyUSB1, ...

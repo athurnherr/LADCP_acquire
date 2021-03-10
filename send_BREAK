@@ -1,0 +1,34 @@
+#!/usr/local/bin/perl
+#======================================================================
+#                    S E N D _ B R E A K 
+#                    doc: Tue Aug  8 13:58:51 2006
+#                    dlm: Tue Aug  8 19:41:01 2006
+#                    (c) 2006 turbulence@
+#                    uE-Info: 30 19 NIL 0 0 72 10 2 8 NIL ofnI
+#======================================================================
+
+# read from tty, write to stdout
+
+# HISTORY:
+#  Aug  8, 2006: - created from [bbabble] on DYNAMUCK cruise
+
+use POSIX ();
+
+$USAGE = "Usage: $0 <tty device>\n";
+die($USAGE) unless (@ARGV == 1);
+$TTY = $ARGV[0];
+
+print(STDERR "Opening $TTY...");
+my($sfd);
+open(TTY,$TTY) || die(" $!\n");
+$sfd = fileno(TTY);
+print(STDERR "\n");
+
+print(STDERR "Sending BREAK...");
+die(" tcsendbreak: $!\n")
+    unless defined(POSIX::tcsendbreak($sfd,0));
+print(STDERR "\n");
+
+exit(0);
+
+

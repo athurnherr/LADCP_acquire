@@ -1,0 +1,130 @@
+#======================================================================
+#                    R E A D M E 
+#                    doc: Sat Mar 20 23:10:10 2004
+#                    dlm: Mon Oct 18 12:55:18 2010
+#                    (c) 2004 A.M. Thurnherr
+#                    uE-Info: 63 8 NIL 0 0 72 3 2 8 NIL ofnI
+#======================================================================
+
+=Introduction=
+
+The LADCP_acquire software implements LADCP data acquisition on UN*X
+systems (e.g. Linux, MacOSX, FreeBSD, etc.). It consists of the bbabble
+program, a portable bbtalk replacement written in perl, as well as a
+number of "operator scripts", written in expect. The main purpose of
+the software is to provide a comfortable and "operator-error-tolerant"
+command-line environment for data acquisition from single- and dual-head
+LADCP systems built using Teledyne/RDI heads.
+
+The documentation assumes familiarity with UN*X and LADCP data
+acquisition. (If you do not know what a UN*X "special file" is or have
+never seen an ADCP command file, this software and documentation is not
+for you.) While I do not intend to support this software, bug reports
+sent to <athurnherr@yahoo.com> are welcome. This [README] file contains
+notes on how to setup and use the LADCP_acquire data acquisitions
+software for a new cruise. For notes on installation on different UN*X
+flavors see [README.*] files (e.g. [README.Linux]). 
+
+
+=Connecting ADCP Heads to Acquisitions Computer=
+
+1) physically connect the instruments
+	- many USB-to-serial adapters do not work; we use Keyspan adapters
+
+2) determine the special files of the serial ports the instruments are
+   connected to:
+	- Linux: /dev/ttyS0 /dev/ttyS1 for standard serial ports
+	- Linux: /dev/ttyUSB0 /dev/ttyUSB1 for USB2serial ports
+	- FreeBSD: /dev/cuad0 /dev/cuad1 for standard serial ports
+	- MacOSX: depends on USB2serial adapter, e.g. /dev/cu.USA* for
+  	          a keyspan USA-19QW adapter;
+
+3) run "prepare_instrument <serial-port>" (e.g. prepare_instrument /dev/ttyS0)
+	- the search path must be set up to include the directory of the
+	  "prepare_instrument" script, i.e. it is NOT possible to use
+	  something like "./prepare_instrument /dev/ttyS0"
+	- this will reset the default communications speed of the
+	  instrument to 9600bps and report the instrument's serial
+	  number
+	- if this command does not work, none of the others will
+	- to troubleshoot, you can use "bbabble <serial-port>" but
+	  you're on your own there
+	  
+4) add the special-files and serial numbers to [CRUISE_SETUP.expect]
+	- can change other settings, too
+
+5) test everything by running "reset2" and "dir2"
+
+----------------------------------------------------------------------
+
+=Operator Scripts=
+
+NB: Before using any of the operator scripts, edit [CRUISE_SETUP.expect] to
+    set cruise-specific parameters.
+
+NB: the search path must be set up to include the directory of the
+    operator scripts. It is NOT possible, to use the operator scripts
+    with full pathnames (e.g. ./reset2)
+
+NB: scripts ending in 1 are for use in a single-headed system; scripts
+    ending in 2 are for use in a dual-headed system.
+
+reset1/reset2		wake up & reset instruments
+dir1/dir2		list recorder directories
+erasemem1/erasemem2	clear recorder memory
+interact1/interact2	enter interactive mode (similar to BBTALK)
+ladcp1/ladcp2		start new cast (upload command file & start pinging)
+abort1/abort2		abort started cast (rename cast directory)
+endladcp1/endladcp2	end cast (stop pinging & download data)
+checkfiles1/checkfiles2	post-process data after download ok (check and
+			backup data files)
+
+ladcp_send_cmd <tty port> <cmd-file>
+			send command file to LADCP connected to specific
+			port; this is the command that can be used to
+			start a cast on a dual-headed instrument
+			connected to a switchbox
+
+print_version		print version of acquire scripts
+
+----------------------------------------------------------------------
+
+=Aborting/Restarting Casts=
+
+After a cast has been started with ladcp1/2 it can be aborted with
+abort1/2. This renames the cast sub-directory that is created by
+ladcp1/2. However, it does not erase the memory on the ADCP. This has to
+be accomplished manually with erasemem1/2.
+
+----------------------------------------------------------------------
+
+=Colors=
+
+- for dual-headed systems, color is determined by the serial numbers
+  listed in [CRUISE_SETUP.expect]: red for the master and blue for the
+  slave;
+
+- this can be different to the colors if [bbabble] is used directly,
+  because [bbabble] does not know anything about the instruments;
+
+----------------------------------------------------------------------
+
+=Problems=
+
+- if downloading is to be restarted the RDI files have to be deleted
+  manually;
+
+- all files are downloaded to the directory corresponding to the last
+  deployment name; if there are data from multiple casts present in
+  an instrument, they have to be copied to the correct directories
+  manually;
+
+----------------------------------------------------------------------
+
+=TTY Utilities=
+
+[bbabble]		bbtalk replacement
+[ttycat]		read from TTY, write to STDOUT (e.g. for logging GPS
+			data streams)
+[send_break]		send BREAK to TTY
+[find_comms_params]	cycle through comms params to determine baud rate &c

@@ -1,0 +1,309 @@
+#======================================================================
+#                    L I B A C Q U I R E 2 . E X P E C T 
+#                    doc: Sun Mar  7 19:18:09 2021
+#                    dlm: Wed Mar 10 15:23:10 2021
+#                    (c) 2021 A.M. Thurnherr
+#                    uE-Info: 13 29 NIL 0 0 72 0 2 4 NIL ofnI
+#======================================================================
+
+# HISTORY:
+#	Mar  7, 2021: - created
+#	Mar  8, 2021: - improved
+#	Mar  9, 2021: - improved
+#	Mar 10, 2021: - made work
+
+#======================================================================
+# User-Interation Routines
+#======================================================================
+
+proc affirm {prompt {to -1} {timeout_return 0}} {			# yes/no question with timeout
+	send_user $prompt;										# and default answer
+	while {1} {
+		expect_user {
+			timeout {
+				if {$timeout_return == 0} {
+					send_user "N\n";
+				} else {
+					send_user "Y\n";
+				}
+				return $timeout_return;
+			}
+			-timeout $to -re "^y.*|^Y.*" 	{return 1;}
+			-timeout $to -re "^n.*|^N.*"	{return 0;}
+			-re {..*} {send_user "Please answer Y or N..."}
+		}
+	}
+}
+
+proc input_int {prompt} {									# input an integer
+	while {1} {
+		send_user $prompt;
+		expect_user {
+			-timeout -1 -re {^[0-9]+\n} {
+				regsub {^0*} $expect_out(0,string) {} decimal_val;
+				return $decimal_val;
+			}
+			-timeout -1 -re {.+} {send_user "only integers, please!\n"}
+		}
+	}
+}
+
+proc input_stncast {prompt} {								# input a station.cast number
+	while {1} {
+		send_user $prompt;
+		expect_user {
+			-timeout -1 -re {^[0-9\.]+\n} {
+				regsub {^0*} $expect_out(0,string) {} stncast_val;
+				return $stncast_val;
+			}
+			-timeout -1 -re {.+} {send_user "only numbers and periods, please!\n"}
+		}
+	}
+}
+
+#======================================================================
+# Utilities
+#======================================================================
+
+set cid -1;													# current instrument (PRIMARY 0 or SECONDARY 1)
+
+proc set_color {{id -1}} {									# set instrument color
+	if {$id == 0} {
+		send_user [exec tput setaf 1];
+	} elseif {$id == 1} {
+		send_user [exec tput setaf 4];
+	} else {
+		send_user [exec tput setaf 0];
+	}
+}
+
+proc select_instrument {{id -1}} {							# select instrument for comms
+	global cid;
+	global spawn_id;
+	global PRIMARY_proc;
+	global SECONDARY_proc;
+
+	set cid $id;
+	if {$cid == 0} {
+		set spawn_id $PRIMARY_proc;
+	} elseif {$cid == 1} {
+		set spawn_id $SECONDARY_proc;
+	} else {
+		error "select_instrument $cid"
+	}
+}
+
+proc error {msg} {											# print colorful error message & exit
+	global cid;
+	set_color $cid;
+	send_error "\nError: $msg\n";
+	set_color;
+	exit 1;
+}
+
+#======================================================================
+# General Routines
+#======================================================================
+
+proc init_acquire {} {										# load  libraries and setup
+	global DATA_DIRECTORY;
+	global PRIMARY_COMMS; global SECONDARY_COMMS; 
+	global PRIMARY_SETUP; global SECONDARY_SETUP; 
+	global PRIMARY_FILE_LBL; global SECONDARY_FILE_LBL; 
+	global YMODEM_RECEIVER;
+
+	send_user "acquire V2\n";
+	source [regsub {Ldir} [exec which Ldir] {libTRDI.expect}];
+	source [regsub {Ldir} [exec which Ldir] {libNortek.expect}];
+	source CRUISE_SETUP.expect;
+	set_color;
+}
+
+proc connect_to_instruments {} {							# set up communications
+	global cid;
+	global spawn_id;
+	global PRIMARY_COMMS; global SECONDARY_COMMS; 
+	global PRIMARY_proc; global SECONDARY_proc; 
+	global YMODEM_RECEIVER
+
+	set cid 0; set_color $cid;
+	if {[regexp {^/dev/} $PRIMARY_COMMS]} {
+		spawn TRDIterm -ms -y $YMODEM_RECEIVER $PRIMARY_COMMS;
+		wait4_TRDIterm_startup;
+	} else {
+		spawn telnet $PRIMARY_COMMS 9000;
+		telnet_login;
+	}
+	set PRIMARY_proc $spawn_id;
+	
+	set cid 1; set_color $cid;
+	if {[info exists SECONDARY_COMMS]} {
+		if {[regexp {^/dev/} $SECONDARY_COMMS]} {
+			spawn TRDIterm -ms -y $YMODEM_RECEIVER $SECONDARY_COMMS;
+			wait4_TRDIterm_startup;
+		} else {
+			spawn telnet $SECONDARY_COMMS 9000;
+			telnet_login;
+		}
+		set SECONDARY_proc $spawn_id;
+	}
+}
+
+#======================================================================
+# Function Library
+#	- each routine implements a single function
+#	- simple code dispatchers, calling appropriate library functions
+#	- mostly identical code
+#======================================================================
+
+proc wakeup_instruments {} {										# wake up instruments
+	global PRIMARY_COMMS;
+	global SECONDARY_COMMS; 
+
+	select_instrument 0;
+	if {[regexp {^/dev/} $PRIMARY_COMMS]} {
+		wakeup_TRDI;
+	} else {
+		wakeup_Nortek;
+	}
+	if {[info exists SECONDARY_COMMS]} {
+		select_instrument 1;
+		if {[regexp {^/dev/} $SECONDARY_COMMS]} {
+			wakeup_TRDI;
+		} else {
+			wakeup_Nortek;
+		}
+	}
+}
+
+
+proc shutdown_instruments {} {										# suspend instruments
+	global PRIMARY_COMMS;
+	global SECONDARY_COMMS; 
+
+	select_instrument 0;
+	if {[regexp {^/dev/} $PRIMARY_COMMS]} {
+		shutdown_TRDI;
+	} else {
+		shutdown_Nortek;
+	}
+	if {[info exists SECONDARY_COMMS]} {
+		select_instrument 1;
+		if {[regexp {^/dev/} $SECONDARY_COMMS]} {
+			shutdown_TRDI;
+		} else {
+			shutdown_Nortek;
+		}
+	}
+}
+
+
+proc list_dir {} {													# list directory and set $memory_empty variable
+	global PRIMARY_COMMS;
+	global SECONDARY_COMMS;
+	global memory_empty;
+	
+	select_instrument 0;
+	if {[regexp {^/dev/} $PRIMARY_COMMS]} {
+		list_dir_TRDI;
+	} else {
+		list_dir_Nortek;
+	}
+	if {[info exists SECONDARY_COMMS]} {
+		set primary_memory_empty $memory_empty;
+		set memory_empty 0;
+		select_instrument 1;
+		if {[regexp {^/dev/} $SECONDARY_COMMS]} {
+			list_dir_TRDI;
+		} else {
+			list_dir_Nortek;
+		}
+		if {$memory_empty && !$primary_memory_empty} {
+			set memory_empty 0;
+        }
+	}
+}
+
+
+proc erase_memory {} {												# erase memory recorders
+	global PRIMARY_COMMS;
+	global SECONDARY_COMMS;
+
+	select_instrument 0;
+	if {[regexp {^/dev/} $PRIMARY_COMMS]} {
+		erase_memory_TRDI;
+	} else {
+		erase_memory_Nortek;
+	}
+	if {[info exists SECONDARY_COMMS]} {
+		select_instrument 1;
+		if {[regexp {^/dev/} $SECONDARY_COMMS]} {
+			erase_memory_TRDI;
+		} else {
+			erase_memory_Nortek;
+		}
+	}
+}
+
+proc upload_configs {} {											# upload command files (ending in a start pinging)
+	global PRIMARY_COMMS; global SECONDARY_COMMS;
+	global PRIMARY_SETUP; global SECONDARY_SETUP; 
+	global PRIMARY_FILE_LBL; global SECONDARY_FILE_LBL;
+
+	if {[info exists SECONDARY_COMMS]} {							# NB: must start secondary first
+		select_instrument 1;
+		if {[regexp {^/dev/} $SECONDARY_COMMS]} {
+			upload_config_TRDI $SECONDARY_SETUP $SECONDARY_FILE_LBL;
+		} else {
+			upload_config_Nortek $SECONDARY_SETUP $SECONDARY_FILE_LBL;
+		}
+	}
+	select_instrument 0;
+	if {[regexp {^/dev/} $PRIMARY_COMMS]} {
+		upload_config_TRDI $PRIMARY_SETUP $PRIMARY_FILE_LBL;
+	} else {
+		upload_config_Nortek $PRIMARY_SETUP $PRIMARY_FILE_LBL;
+	}
+}
+
+proc set_clocks {} {												# computer clock  must be set to UTC
+	global PRIMARY_COMMS;											# MacOSX: sudo ln -sf /usr/share/zoneinfo/UTC /etc/localtime
+	global SECONDARY_COMMS;
+
+	select_instrument 0;
+	if {[regexp {^/dev/} $PRIMARY_COMMS]} {
+		set_clock_TRDI;
+	} else {
+		set_clock_Nortek;
+	}
+	if {[info exists SECONDARY_COMMS]} {
+		select_instrument 1;
+		if {[regexp {^/dev/} $SECONDARY_COMMS]} {
+			set_clock_TRDI;
+		} else {
+			set_clock_Nortek;
+		}
+	}
+}
+
+
+proc load_factory_defaults {} {
+	global PRIMARY_COMMS;
+	global SECONDARY_COMMS;
+
+	select_instrument 0;
+	if {[regexp {^/dev/} $PRIMARY_COMMS]} {
+		load_factory_defaults_TRDI;
+	} else {
+		load_factory_defaults_Nortek;
+	}
+	if {[info exists SECONDARY_COMMS]} {
+		select_instrument 1;
+		if {[regexp {^/dev/} $SECONDARY_COMMS]} {
+			load_factory_defaults_TRDI;
+		} else {
+			load_factory_defaults_Nortek;
+		}
+	}
+}
+

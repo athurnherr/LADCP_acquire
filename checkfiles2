@@ -1,0 +1,92 @@
+#!/usr/bin/expect -f
+#======================================================================
+#                    C H E C K F I L E S 2 
+#                    doc: Wed Mar 10 22:23:52 2004
+#                    dlm: Thu Aug 26 00:26:06 2010
+#                    (c) 2004 A.M. Thurnherr
+#                    uE-Info: 27 39 NIL 0 0 72 2 2 8 NIL ofnI
+#======================================================================
+
+# HISTORY:
+#  Jun 16, 2004: - copied from [endladcp2] to allow continuation after
+#		   download ok
+#  Jun 27, 2004: - removed download dir override
+#  Feb 14, 2006: - BUG: log files were written to bin dir
+#  Oct 28, 2006: - adapted to old version expect (regsub)
+#		 - allowed for lrb downcasing filenames
+#  Nov 19, 2008: - added version
+#  Aug 25, 2010: - DEFAULTS.expect -> CRUISE_SETUP.expect
+#		 - libBB.expect -> libRDI.expect
+
+#----------------------------------------------------------------------
+# Setup
+#----------------------------------------------------------------------
+
+log_user 0;
+source CRUISE_SETUP.expect;
+regsub {dir1} [exec which dir1] {libRDI.expect} path;
+source $path;
+
+print_version;
+
+if ![file isdirectory $raw_dir] {
+	error "directory $raw_dir does not exist";
+}
+
+#----------------------------------------------------------------------
+# Get Station Number
+#----------------------------------------------------------------------
+
+spawn bbabble -ms $tty0 $tty1;
+
+set_color;
+send_user "Connecting to instruments...";
+wait_for_startup;
+reset_two_instruments;
+
+send_user "\nGetting station number...";
+select_master 0;
+set master_deployment_name [get_deployment_name];
+if {[scan $master_deployment_name $master_deployment_name_fmt master_stn] != 1} {
+	send_error "$master_deployment_name $master_deployment_name_fmt";
+	error "Can't get station number of master";
+}
+select_slave; set slave_deployment_name [get_deployment_name];
+set slave_deployment_name [get_deployment_name];
+if {[scan $slave_deployment_name $slave_deployment_name_fmt slave_stn] != 1} {
+	error "Can't get station number of slave";
+}
+if {$master_stn != $slave_stn} {
+	select_master; put_to_sleep; select_slave; put_to_sleep;
+	error "Master/slave stations disagree";
+}
+set stn [format $stn_format $master_stn];
+send_user "\[$stn\]";
+
+set cast_dir [format %s/%s $raw_dir $stn];
+if {![file isdirectory $cast_dir]} {
+	select_master; put_to_sleep; select_slave; put_to_sleep;
+	error "cast directory $cast_dir does not exist!";
+}
+
+cd $cast_dir;
+send \004;
+
+#----------------------------------------------------------------------
+# Check & Backup Data
+#----------------------------------------------------------------------
+
+regsub {.*/} $argv0 {} tmp;
+start_logging [format %s_%s.log $tmp $stn];
+
+send_user "\nChecking data files...\n";
+set_color 0; check_data [format %s000.000 [format $master_deployment_name_fmt $master_stn]];
+set_color 1; check_data [format %s000.000 [format $slave_deployment_name_fmt $slave_stn]];
+set_color;
+
+send_user "Backing up data files...";
+backup_master_data $master_stn;
+backup_slave_data $slave_stn;
+
+send_user "\nDone\n"
+

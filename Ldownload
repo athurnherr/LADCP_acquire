@@ -1,0 +1,73 @@
+#!/usr/bin/expect -f
+#======================================================================
+#                    L D O W N L O A D 
+#                    doc: Sun Mar  7 16:18:07 2021
+#                    dlm: Wed Mar 10 14:36:36 2021
+#                    (c) 2021 A.M. Thurnherr
+#                    uE-Info: 67 13 NIL 0 0 72 2 2 4 NIL ofnI
+#======================================================================
+
+# HISTORY:
+#  Mar  10, 2021: - created 
+
+source [regsub {Ldir} [exec which Ldir] {libacquire2.expect}];
+
+log_user 0;
+init_acquire;
+
+if {![file isfile .last_LADCP]} {							# get LADCP profile id
+	error ".last_LADCP: no such file or directory"; 
+}
+set profnum [exec cat .last_LADCP];
+
+set cast_dir [format %s/%03d $DATA_DIRECTORY $profnum];		# sanity check
+if {![file isdirectory $cast_dir]} {
+	send_error "ABORT: data directory $cast_dir does not exist; correct .last_LADCP to proceed\n";
+	exit 1;
+}
+	
+send_user "Connecting...";									# wake up instruments
+connect_to_instruments;
+wakeup_instruments;
+
+list_dir;													# erase memory if needed/requested
+if {$memory_empty} {
+	set cid -1;
+	error "No data in either instrument!";
+}
+	
+send_user "\nDownloading Data...";							# download data
+
+if {[info exists SECONDARY_COMMS] && \
+	[regexp {^/dev/} $PRIMARY_COMMS] && \
+	[regexp {^/dev/} $SECONDARY_COMMS]} {					# dual head TRDI system => parallel download
+		select_instrument 0; start_download_TRDI;
+		select_instrument 1; start_download_TRDI;
+		log_user 1;
+		wait4_download_finish_TRDI;
+} else {													# sequential downloads
+	if {![regexp {^/dev/} $PRIMARY_COMMS]} {				# first, Norteks
+		select_instrument 0;
+		download_Nortek $PRIMARY_COMMS;
+	}
+	if {[info exists SECONDARY_COMMS] && \
+		![regexp {^/dev/} $SECONDARY_COMMS]} {
+		select_instrument 1;
+		download_Nortek $SECONDARY_COMMS;
+	}
+	if {[regexp {^/dev/} $PRIMARY_COMMS]} {					# finally, the single TRDI
+		select_instrument 0;
+		start_download_TRDI; log_user 1;
+		wait4_download_finish_TRDI;
+	}
+	if {[info exists SECONDARY_COMMS] && \
+		[regexp {^/dev/} $SECONDARY_COMMS]} {
+		select_instrument 1;
+		start_download_TRDI; log_user 1;
+		wait4_download_finish_TRDI;
+	}
+}	
+
+shutdown_instruments;
+send_user "\nDone\n";
+

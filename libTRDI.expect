@@ -1,0 +1,295 @@
+#!/usr/bin/expect -f
+#======================================================================
+#                    L I B T R D I . E X P E C T 
+#                    doc: Sun Mar  7 19:15:29 2021
+#                    dlm: Wed Mar 10 15:22:31 2021
+#                    (c) 2021 A.M. Thurnherr
+#                    uE-Info: 15 32 NIL 0 0 72 2 2 4 NIL ofnI
+#======================================================================
+
+
+# HISTORY:
+#   Mar  7, 2021: - created
+#	Mar  8, 2021: - improved
+#	Mar  9, 2021: - improved
+#	Mar 10, 2021: - made it work
+
+global TRDI_BREAK;
+global DNLOAD;
+
+set NEXT_SPEED	\002;	# ^B							# TRDIterm keyboard commands
+set TRDI_BREAK 	\003;	# ^C
+set HELP	\010;	# ^H
+set TOGGLE	\024;	# ^T
+set DNLOAD	\030;	# ^X
+
+proc gobble_prompts {} {								# gobble old prompts
+	set continue_flushing 1;
+	while {$continue_flushing > 0} {
+		expect {
+			timeout {set continue_flushing 0;}
+			-timeout 0 ">";
+		}
+	}
+}
+
+proc BREAK_TRDI {} {									# send BREAK
+	global TRDI_BREAK;
+
+	gobble_prompts;
+	send $TRDI_BREAK;									# Wakeup Instrument
+	expect {
+		timeout {error "Connection timeout: no deck power?"}
+		-timeout 8 "RD Instruments (c)"
+	}
+	expect {											# gobble prompt as well
+		timeout {error "Can't get wakeup prompt"}
+		-timeout 3 ">"
+	}
+}
+
+proc no_error_BREAK_TRDI {} {							# send BREAK without errcheck
+	global TRDI_BREAK;
+
+#	gobble_prompts;
+	send $TRDI_BREAK;
+	expect -timeout 8 "RD Instruments (c)"
+	expect -timeout 3 ">"
+}
+
+proc next_speed {} {									# select next baudrate
+	global NEXT_SPEED;
+	
+	send $NEXT_SPEED;
+	expect {
+		timeout {error "Cannot change speed"}
+		-timeout 5 ": end"
+	}
+	sleep 1
+}
+
+proc wait4_TRDIterm_startup {} {						# wait for TRDIterm startup
+	global cid;
+	set cid 0;
+	expect {
+		timeout {error "TRDIterm failed to start up"}
+		-timeout 10 "device" {
+			error "No such device: cables plugged in???"
+		}
+		-timeout 10 "Instrument 0" {}
+	}
+#	sleep 1;
+}
+
+proc wakeup_TRDI {} {									# reset regardless of state
+	no_error_BREAK_TRDI;
+	send "\r";											# send NOP command
+	expect {
+		timeout {
+			send_error ".";
+			BREAK_TRDI;									# try again
+		}
+		-timeout 5 ">";									# instrument response received
+	}
+}
+
+proc wait4_prompt {{tout 5}} {							# wait for prompt
+	expect {
+		timeout {error "Can't get prompt"}
+		-timeout $tout "ERR" {
+			error "Instrument returned error $expect_out(buffer)";
+		}
+		-timeout $tout ">"
+	}
+}
+
+proc shutdown_TRDI {} {									# send instrument to sleep
+	gobble_prompts;
+	send "\r"; wait4_prompt;
+	send "CZ\r";
+	expect {
+		timeout {error "Can't put Instrument to sleep"}
+		-timeout 5 -re "Powering Down|POWERING DOWN"
+	}
+}
+
+proc ensure_shutdown_TRDI {} {							# send instrument to sleep...
+	gobble_prompts;										# unless already sleeping
+	send "CZ\r";
+	expect {
+		timeout {error "Can't put Instrument to sleep"}
+		-timeout 5 -re "Powering Down|POWERING DOWN"
+	}
+}
+
+proc start_download_TRDI {} {							# start downloading
+	global DNLOAD cast_dir cid;
+
+	set cwd [pwd];
+	cd $cast_dir;
+
+	gobble_prompts;
+	send "\r"; wait4_prompt;
+	send $DNLOAD;
+	expect {
+		timeout { error "Cannot start TRDIterm download"; }
+		-timeout 2 "Download Directory:" {}
+	}
+	send "$cast_dir\r";
+	expect {
+		timeout { error "Can't start download (memory empty?)"; }
+		-timeout 10 "exists, skipped" { error "$cast_dir already contains TRDI data files!"; }
+		-timeout 10 "Receiving:" {}
+	}
+	cd $cwd;
+	set_color $cid;
+	send_error "\n";
+	log_user 1;
+}
+
+proc wait4_download_finish_TRDI {} {					# wait for download(s) to finish
+	global BREAK TOGGLE;
+	expect {
+		timeout {error "Download did not finish ok"}
+		-timeout -1 "Transfer complete" {}
+		-timeout -1 "ABNORMALLY" {
+			error "Download from TRDI failed";
+		}
+	}
+	expect -timeout 5 ">";
+	log_user 0;
+	set_color;
+}
+
+proc list_dir_TRDI {} {									# list directory & set memory_empty flag
+	global cid;
+	global memory_empty;
+
+	set memory_empty 0;
+	gobble_prompts;
+	send "\r"; wait4_prompt;
+	send "RR\r";
+	set_color $cid; log_user 1;
+	send_user "\n";
+	expect {
+		timout { error "cannot get recorder directory" }
+		-timeout 5 "No files found" { set memory_empty 1; }
+		-timeout 5 "bytes free";
+	}
+	wait4_prompt;
+	log_user 0; set_color;					
+}
+
+proc erase_memory_TRDI {} {								# erase memory
+	gobble_prompts;
+
+	send "\r"; wait4_prompt;
+	send "RA\r";
+	expect {
+		timeout {error "Can't get number of deployments"};
+		-timeout 3 -re {[1-9]} {
+			wait4_prompt;
+			send "RE ErAsE\r";
+			expect {
+				timeout {error "Can't erase recorder"}
+				-timeout 5 "Recorder erased."			
+			}
+			wait4_prompt;
+		}
+		-timeout 3 ">"									# nothing to erase
+	}
+}
+
+			
+proc set_clock_TRDI {} {								# set instrument clock
+	gobble_prompts;
+	send "\r"; wait4_prompt;
+	set time [exec date +%Y/%m/%d,%H:%M:%S];
+	send "TT$time\r";
+	wait4_prompt;
+}
+
+proc upload_config_TRDI {cfn lbl} {						# upload command file
+	global cid;
+	global profnum;
+	
+	gobble_prompts;										# logging stops in this routine
+	send "\r"; wait4_prompt;
+	set cf [open $cfn "r"];
+	set_color $cid;
+	while {[gets $cf line] >= 0} {
+		regsub {[ 	]*;.*} $line {} line;
+		regsub {\$\{ID_STR\}} $line [format "%03d%s" $profnum $lbl] line;	# replace ${ID_STR}
+		if {![regexp {^[ 	]*$} $line]} {
+			if {$line == "CS" || $line == "cs"} {
+				send_error "*";
+				send "$line\r";
+				expect {
+					timeout {};
+					-timeout 3 expect ">" {
+						error "Got prompt after CS command";
+					}
+				}
+				set_color;
+				close $cf;
+				return;
+			}
+			send "$line\r";
+			send_error ".";
+			expect {
+				timeout {error "Can't get prompt after sending $line"};
+				-timeout 5 "ERR" {
+					error "Sending command $line returned $expect_out(buffer)";
+				}
+				-timeout 5 ">"
+			}
+		}
+	}
+	set_color;
+	close $cf;
+}
+
+proc load_factory_defaults_TRDI {} {						# set default params
+	gobble_prompts;
+	send "\r"; wait4_prompt;
+	send "CR1\r";
+	expect {
+		timeout {error "Can't get prompt"};
+		-timeout 10 "ERR" {
+			error "command CR1 returned $expect_out(buffer)";
+		}
+		-timeout 10 ">"
+        }
+}
+
+proc set_deployment_name_TRDI {{dn UNSET}} {				# set deployment name
+	gobble_prompts;
+	send "\r"; wait4_prompt;
+	send "RN$dn\r";
+	expect -timeout 1 "ERR";								# BB150
+	wait4_prompt;
+}
+
+proc get_deployment_name_TRDI {} {							# get deployment name
+	global stn_format master_deployment_name_fmt;
+	gobble_prompts;
+	send "\r"; wait4_prompt;
+	send "RN?\r"; sleep 1;
+	expect {
+		timeout {error "Can't get deployment name";}
+		-timeout 1 "ERR" {									# BB150
+			if {![file isfile .last_stn]} {
+				error "Can't find .last_stn";
+			}
+			set stn [exec cat .last_stn];
+			set dn [format $master_deployment_name_fmt $stn];
+			wait4_prompt;
+			return $dn;			
+		}
+		-timeout 5 -re {Current deployment name = ([^\r]*)}
+	}
+	set dn $expect_out(1,string);
+	wait4_prompt;
+	return $dn;
+}
+	

@@ -1,0 +1,217 @@
+#!/usr/bin/expect -f
+#======================================================================
+#                    L I B N O R T E K . E X P E C T 
+#                    doc: Sun Mar  7 19:15:29 2021
+#                    dlm: Wed Mar 10 15:17:02 2021
+#                    (c) 2021 A.M. Thurnherr
+#                    uE-Info: 124 45 NIL 0 0 72 2 2 4 NIL ofnI
+#======================================================================
+
+# HISTORY:
+#  Mar  7, 2021: - created
+#  Mar  8, 2021: - continued
+#  Mar  9, 2021: - continued
+#  Mar 10, 2021: - made it work
+
+global NORTEK_BREAK;
+
+set NORTEK_BREAK 	\003;	# ^C
+
+proc print_error_Nortek {} {
+	send "GETERROR\r";
+	expect {
+		timeout 			{ error "GETERROR timed out"; }
+		-timeout 2 "OK" 	{ error "$expect_out(buffer)\n"; }
+		-timeout 2 "ERROR" 	{ error "GETERROR failed\n"; }
+	}
+}
+	
+proc BREAK_Nortek {} {									# send BREAK
+	global NORTEK_BREAK;
+
+	send $NORTEK_BREAK;									# Wakeup Instrument
+	expect {
+		timeout {error "Can't wake Instrument"}
+		-timeout 5 "OK" {}
+		-timeout 5 "ERROR" { print_error_Nortek; }
+	}
+}
+
+proc no_error_BREAK_Nortek {} {							# send BREAK without errcheck
+	global NORTEK_BREAK;
+
+	send $NORTEK_BREAK;
+	expect -timeout 5 "OK" {}
+}
+
+proc telnet_login {} {									# wait for telnet startup
+	expect {
+		timeout { error "Connection timeout: no deck power?" }
+		-timeout 5 "Connection refused" {
+			error "Connection refused: instrument not ready?"
+		}
+		-timeout 5 "Username:" {}
+	}
+	send "nortek\r"
+	expect {
+		timeout { error "login timed out" }
+		-timeout 2 "Password:"
+	}
+	send "\r"
+	sleep 0.1;											# without this sleep, common error: ^C%% Could not connect to Doppler processor
+	expect {
+		timeout { error "password timed out" }
+		eof	{ error "telnet port 9000 busy" }
+		-timeout 2 "Nortek"
+	}
+}
+
+proc wakeup_Nortek {} {									# reset regardless of state
+	no_error_BREAK_Nortek;								# enter confirmation mode
+	send "INQ\r"
+	expect {
+		timeout { error "instrument not responding" }
+#		-timeout 2 "0001" {								# measurement mode (not possible after break?)
+#			send "MC\n";
+#			expect {
+#				timeout { error "MC timed out" }
+#				-timeout 2 "OK" {}
+#				-timeout 2 "ERROR" { print_error_Nortek; }
+#			}
+#		}
+		-timeout 2 "0005" {
+			send "MC\n";
+			expect {
+				timeout { error "MC timed out" }
+				-timeout 2 "OK" {}
+				-timeout 2 "ERROR" { print_error_Nortek; }
+			}
+		}
+		-timeout 2 "0002"
+	}
+	expect {
+		timeout { error "cannot wake up instrument" }
+		-timeout 2 "OK" {}
+		-timeout 2 "ERROR" { print_error_Nortek; }
+    } 
+}
+
+proc shutdown_Nortek {} {								# send instrument to sleep
+	send "POWERDOWN\r";
+	expect {
+		timeout {error "Can't put Instrument to sleep"}
+		-timeout 2 "OK" {}
+		-timeout 2 "ERROR" { print_error_Nortek; }
+	}
+}
+
+proc ensure_shutdown_Nortek {} {						# send instrument to sleep...
+	send "POWERDOWN\r";
+}
+
+proc download_Nortek {comms} {							# download data using wget
+	global cid;
+	global cast_dir;
+	
+	if {[file isfile [format "%s/START.hdr" $cast_dir]]} {
+		error "Directory $cast_dir already contains Nortek data files!"
+	}
+	exec sh -c "cd $cast_dir && wget ftp://$comms/* 2>wget.stderr || echo wget failed >&2"
+	if {![file isfile [format "%s/START.hdr" $cast_dir]]} {
+		error [exec cat [format "%s/wget.stderr" $cast_dir]];
+	} else {
+		set_color $cid;
+		send_user "\nNortek download complete";
+		set_color;
+	}
+}
+
+proc list_dir_Nortek {} {								# list directory & set memory_empty
+	global cid;
+	global memory_empty;
+
+	set memory_empty 1;
+	
+	set_color $cid; log_user 1;
+	send_user "\r";										# without this, the listfiles output is not output until the end
+	send "LISTFILES,OPT=\"la\"\r";
+	expect {
+		timeout { error "LISTFILES failed" }
+		-timeout 2 "rw" { set memory_empty 0; }
+		-timeout 2 "OK" {}
+		-timeout 2 "ERROR" { print_error_Nortek; }
+	}
+	log_user 0; set_color;
+}
+
+proc erase_memory_Nortek {} {							# erase memory
+	send "ERASE,CODE=9999\r";
+	expect {
+		timeout {error "Can't erase recorder"}
+		-timeout 2 "OK" {}
+		-timeout 2 "ERROR" { print_error_Nortek; }
+	}
+}
+
+proc set_clock_Nortek {} {								# set instrument clock
+	set time [exec date "+%Y-%m-%d %H:%M:%S"];
+	send "SETCLOCKSTR,TIME=\"$time\"\r";
+	expect {
+		timeout {error "SETCLOCKSTR timed out"; }
+		-timeout 2 "OK" {}
+		-timeout 2 "ERROR" { print_error_Nortek; }
+	}
+}
+
+proc upload_config_Nortek {cfn lbl} {					# upload command file
+	global cid;
+	global profnum;
+
+	set cf [open $cfn "r"];
+	set parsing_command 0; set cmd {};
+	set_color $cid;
+	while {[gets $cf line] >= 0} {
+		regsub {;.*} $line {} line;										# remove comments
+		regsub {^[ 	]*} $line {} line;
+		regsub {[ 	]*$} $line {} line;
+		regsub {\$\{ID_STR\}} $line [format "%03d%s" $profnum $lbl] line;	# replace ${ID_STR}
+		if {[regexp {^[ 	]*$} $line]} {								# empty line -> send \r to execute command
+			if {$parsing_command} {
+				send "$cmd\r";
+				expect {
+					timeout { error "Command timed out"; }
+					-timeout 4 "OK" { send_error "."; }
+					-timeout 4 "ERROR" { print_error_Nortek; }
+				}
+				set parsing_command 0; set cmd {};
+			}
+		} else {									# not empty line -> send START\r or partial command
+			if {[regexp {^[Ss][Tt][Aa][Rr][Tt]$} $line]} {
+				send_error "*";
+				send "START\r";
+				expect {
+					timeout { error "START timed out"; }
+					-timeout 5 "OK" {}
+					-timeout 5 "ERROR" { print_error_Nortek; }
+				}
+				set_color;
+				close $cf;
+				return;
+			}
+			set parsing_command 1;
+			set cmd [format "%s%s" $cmd $line];
+		}; # if empty line
+	}; # while gets next line
+	set_color;
+	close $cf;
+}
+
+proc load_factory_defaults_Nortek {} {					# set default params
+	send "SETDEFAULT,CONFIG\r";
+	expect {
+		timeout {error "Command timed out"};
+		-timeout 2 "OK" {}
+		-timeout 2 "ERROR" { print_error_Nortek; }
+    }
+}
+

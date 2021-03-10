@@ -1,0 +1,82 @@
+#!/usr/bin/expect -f
+#======================================================================
+#                    F I N D _ C O M M S _ P A R A M S 
+#                    doc: Mon Mar  8 02:57:35 2004
+#                    dlm: Tue Oct  3 12:41:59 2006
+#                    (c) 2004 A.M. Thurnherr
+#                    uE-Info: 83 0 NIL 0 0 72 2 2 8 NIL ofnI
+#======================================================================
+
+proc try {ttydev speed parity data stop} {
+	if {$parity == "N"} {
+		set pflag {-n};
+	} elseif {$parity == "E"} {
+		set pflag {-e};
+	} elseif {$parity == "O"} {
+		set pflag {-o};
+	} else {
+		error "illegal parity $parity specified";
+	}
+
+	send_user [format "trying %6d baud --- %s/%d/%d..." $speed $parity $data $stop];
+	spawn ttycat -B -b $speed $pflag -d $data -s $stop $ttydev;
+	expect {
+		timeout {
+			exec kill [exp_pid];
+			send_user "\n";
+		}
+		-timeout 1 "Version" {
+			send_user "OK\n";
+			exit;
+		}
+	}
+}
+
+#======================================================================
+# MAIN
+#======================================================================
+
+log_user 0;
+
+if {$argc != 1} {
+	send_error "Usage: $argv0 <tty special file>\n";
+	exit 1;
+}
+set ttydev [lindex $argv 0];
+
+try $ttydev    300 "N" 8 1;
+try $ttydev    300 "E" 7 1;
+try $ttydev    300 "O" 7 1;
+
+try $ttydev   1200 "N" 8 1;
+try $ttydev   1200 "E" 7 1;
+try $ttydev   1200 "O" 7 1;
+
+try $ttydev   2400 "N" 8 1;
+try $ttydev   2400 "E" 7 1;
+try $ttydev   2400 "O" 7 1;
+
+try $ttydev   4800 "N" 8 1;
+try $ttydev   4800 "E" 7 1;
+try $ttydev   4800 "O" 7 1;
+
+try $ttydev   9600 "N" 8 1;
+try $ttydev   9600 "E" 7 1;
+try $ttydev   9600 "O" 7 1;
+
+try $ttydev  19200 "N" 8 1;
+try $ttydev  19200 "E" 7 1;
+try $ttydev  19200 "O" 7 1;
+
+try $ttydev  38400 "N" 8 1;
+try $ttydev  38400 "E" 7 1;
+try $ttydev  38400 "O" 7 1;
+
+try $ttydev  57600 "N" 8 1;
+try $ttydev  57600 "E" 7 1;
+try $ttydev  57600 "O" 7 1;
+
+try $ttydev 115200 "N" 8 1;
+try $ttydev 115200 "E" 7 1;
+try $ttydev 115200 "O" 7 1;
+

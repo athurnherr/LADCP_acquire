@@ -1,0 +1,140 @@
+#!/usr/local/bin/perl
+#======================================================================
+#                    T T Y C A T 
+#                    doc: Tue Aug  8 13:58:51 2006
+#                    dlm: Tue Oct  3 12:15:33 2006
+#                    (c) 2006 turbulence@
+#                    uE-Info: 15 57 NIL 0 0 72 10 2 8 NIL ofnI
+#======================================================================
+
+# read from tty, write to stdout
+
+# HISTORY:
+#  Aug  8, 2006: - created from [bbabble] on DYNAMUCK cruise
+#  Oct  3, 2006: - added -B)reak
+#	         - added dummy -n for [find_comms_params]
+
+use Getopt::Std;
+use POSIX ();
+
+#----------------------------------------------------------------------
+# Usage
+#----------------------------------------------------------------------
+
+$USAGE = "Usage: $0 [-b)aud <rate[9600]>] " .
+		   "[-d)ata <bits[8]>] [-s)top <bits[1]>] " .
+	 	   "[-e)ven | -o)dd | -n)o parity] " .
+	 	   "[send -B)reak] " .
+		   "<tty device>\n";
+
+die($USAGE) unless (getopts('Bb:d:ns:eo'));
+die($USAGE) if ($opt_e+$opt_o+$opt_n > 1);
+die($USAGE) unless (@ARGV == 1);
+
+$opt_b = 9600 unless defined($opt_b);
+$opt_s = 1    unless defined($opt_s);
+$opt_d = 8    unless defined($opt_d);
+
+die("$0: data bits must be 5, 6, 7 or 8\n")
+	unless ($opt_d >= 5 && $opt_d <= 8);
+die("$0: stop bits must be 1 or 2\n")
+	unless ($opt_s == 1 || $opt_s == 2);
+
+$TTY = $ARGV[0];
+
+#----------------------------------------------------------------------
+# determine correct tcsetospeed() argument for non-POSIX speeds
+#----------------------------------------------------------------------
+
+# This is ugly, slow, but seems fairly portable.
+
+open(TMP,'>/tmp/tt.c');
+print(TMP "#include <termios.h>\nB$opt_b\n");
+close(TMP);
+$SPEED = `gcc -E /tmp/tt.c | tail -1`;
+$SPEED = hex($SPEED) if ($SPEED =~ /^0x/);
+$SPEED = oct($SPEED) if ($SPEED =~ /^0/);
+unlink('/tmp/tt.c');
+
+#----------------------------------------------------------------------
+# setup TTY
+#----------------------------------------------------------------------
+
+print(STDERR "Opening $TTY...");
+my($sfd);
+open(TTY,$TTY) || die(" $!\n");
+$sfd = fileno(TTY);
+print(STDERR "\n");
+
+print(STDERR "Configuring $TTY...");
+
+my($t) = POSIX::Termios::new();
+die(" tcgetattr: $!\n")
+	unless defined($t->getattr($sfd));
+
+$t->setiflag($t->getiflag() & ~(POSIX::IGNBRK() |
+				POSIX::BRKINT() |
+				POSIX::PARMRK() |
+				POSIX::ISTRIP() |
+				POSIX::INLCR()	|
+				POSIX::IGNCR()	|
+				POSIX::ICRNL()	|
+				POSIX::IXON()));
+
+$t->setoflag($t->getoflag() & ~POSIX::OPOST());
+
+$t->setlflag($t->getlflag() & ~(POSIX::ECHO() |
+				POSIX::ECHONL() |
+				POSIX::ICANON() |
+				POSIX::ISIG() |
+				POSIX::IEXTEN()));
+
+$cf = $t->getcflag();
+	$cf &= ~POSIX::CSIZE();				# word length
+	$cf |= POSIX::CS5() if ($opt_d == 5);	
+	$cf |= POSIX::CS6() if ($opt_d == 6);
+	$cf |= POSIX::CS7() if ($opt_d == 7);
+	$cf |= POSIX::CS8() if ($opt_d == 8);
+	$cf &= ~POSIX::CSTOPB();			# stop bits
+	$cf |= POSIX::CSTOPB() if ($opt_s == 2);
+	$cf &= ~POSIX::PARENB(); 			# parity
+	if ($opt_e || $opt_o) {
+		$cf |= POSIX::PARENB();
+		$cf |= POSIX::PARODD() if $opt_o;
+	}
+$t->setcflag($cf);
+
+$t->setcc(POSIX::VMIN,1);
+$t->setcc(POSIX::VTIME,0);
+
+$t->setispeed($SPEED);
+$t->setospeed($SPEED);
+
+die(" tcsetattr: $!\n")
+	unless defined($t->setattr($sfd,POSIX::TCSANOW));
+print(STDERR "\n");
+
+#----------------------------------------------------------------------
+# send BREAK if requested
+#----------------------------------------------------------------------
+
+if ($opt_B) {
+	print(STDERR "Sending BREAK...");
+	die(" tcsendbreak: $!\n")
+		unless defined(POSIX::tcsendbreak($sfd,0));
+	print(STDERR "\n");
+}
+	    
+#----------------------------------------------------------------------
+# TTY reader
+#----------------------------------------------------------------------
+
+do {
+	my($buf,$nread);
+	$nread = POSIX::read($sfd,$buf,64);
+	POSIX::write(1,$buf,$nread);
+} while ($nread >= 0);
+
+exit(0);
+
+
