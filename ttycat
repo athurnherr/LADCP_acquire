@@ -1,10 +1,10 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 #======================================================================
 #                    T T Y C A T 
 #                    doc: Tue Aug  8 13:58:51 2006
-#                    dlm: Tue Oct  3 12:15:33 2006
+#                    dlm: Wed Jul  7 15:17:01 2021
 #                    (c) 2006 turbulence@
-#                    uE-Info: 15 57 NIL 0 0 72 10 2 8 NIL ofnI
+#                    uE-Info: 16 54 NIL 0 0 72 10 2 8 NIL ofnI
 #======================================================================
 
 # read from tty, write to stdout
@@ -13,6 +13,7 @@
 #  Aug  8, 2006: - created from [bbabble] on DYNAMUCK cruise
 #  Oct  3, 2006: - added -B)reak
 #	         - added dummy -n for [find_comms_params]
+#  Jul  7, 2021: - BUG: header had /usr/local/bin/perl
 
 use Getopt::Std;
 use POSIX ();

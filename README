@@ -1,9 +1,9 @@
 #======================================================================
 #                    R E A D M E 
 #                    doc: Sat Mar 20 23:10:10 2004
-#                    dlm: Mon Mar 22 08:03:59 2021
+#                    dlm: Wed Jul  7 15:30:55 2021
 #                    (c) 2004 A.M. Thurnherr
-#                    uE-Info: 78 27 NIL 0 0 72 3 2 8 NIL ofnI
+#                    uE-Info: 89 38 NIL 0 0 72 3 2 8 NIL ofnI
 #======================================================================
 
 =Introduction=
@@ -16,82 +16,173 @@ the software is to provide a comfortable and "operator-error-tolerant"
 command-line environment for data acquisition from single- and dual-head
 LADCP systems built using Teledyne/RDI and Nortek ADCPs.
 
-The documentation assumes familiarity with UN*X and LADCP data
-acquisition. (If you do not know what a UN*X "special file" is or have
-never seen an ADCP command file, this software and documentation is not
-for you.) While I do not intend to support this software, bug reports
-sent to <athurnherr@yahoo.com> are welcome. This [README] file contains
-notes on how to setup and use the LADCP_acquire data acquisitions
-software for a new cruise. For notes on installation on different UN*X
-flavors see [README.*] files (e.g. [README.Linux]). 
+The (minimal) documentation assumes familiarity both with LADCP data
+acquisition and with the UN*X command line. (The user is expected to
+know what is meant by a UN*X "special file" and has seen the contents
+of ADCP command files.) While there is no user support for this
+software, bug reports sent to <athurnherr@yahoo.com> are welcome. This
+[README] file contains notes on how to setup and use the LADCP_acquire2
+data acquisitions software for a new cruise. For notes on installation
+on different UN*X flavors see [README.*] files (e.g. [README.Linux]). 
 
+----------------------------------------------------------------------
+
+=Prerequisites=
+
+- UNIX shell with perl and expect interpreters (standard)
+- ADCP_Tools
+	- set of ADCP command-line utilities
+	- available at http://www.ldeo.columbia.edu/cgi-bin/ladcp-cgi-bin/hgwebdir.cgi
+- TRDI ADCPs:
+	- implementation of ymodem file-transfer protocol
+	- USB-to-RS232 adapter and driver
+- Nortek ADCPs:
+	- telnet
+	- wget
+	
+
+----------------------------------------------------------------------
 
 =Connecting ADCP Heads to Acquisitions Computer=
 
 1) physically connect the instruments
-	- NB: not all USB-to-serial adapters are capable of sending
-	      BREAK signals. 
+	TRDI ADCP:
+		- RS-232 connection
+		- USB adapters must support the RS-232 BREAK condition
+	Nortek ADCPs:
+		- Ethernet connection		
 
-2) determine the special files of the serial ports the instruments are
-   connected to:
-	- Linux: /dev/ttyS0 /dev/ttyS1 for standard serial ports
-	- Linux: /dev/ttyUSB0 /dev/ttyUSB1 for USB2serial ports
-	- FreeBSD: /dev/cuad0 /dev/cuad1 for standard serial ports
-	- MacOSX: depends on USB2serial adapter, e.g. /dev/cu.USA* for
-  	          a keyspan USA-19QW adapter;
+2) determine the access ports
+	TRDI:
+		- special files of the serial ports the instruments are
+   		   connected to:
+		- Linux:
+			/dev/ttyS0 /dev/ttyS1 for standard serial ports
+			/dev/ttyUSB0 /dev/ttyUSB1 for USB2serial ports
+		- FreeBSD:
+			/dev/cuad0 /dev/cuad1 for standard serial ports
+		- MacOSX:
+			/dev/cu.* where the link name after the period
+			depends on the USB adapter and port it is
+			plugged into
+	Nortek:
+		- static IP address			
 
-3) run "prepare_instrument <serial-port>" (e.g. prepare_instrument /dev/ttyS0)
-	- the search path must be set up to include the directory of the
-	  "prepare_instrument" script, i.e. it is NOT possible to use
-	  something like "./prepare_instrument /dev/ttyS0"
-	- this will reset the default communications speed of the
-	  instrument to 9600bps and report the instrument's serial
-	  number
-	- if this command does not work, none of the others will
-	- to troubleshoot, you can use "bbabble <serial-port>" but
-	  you're on your own there
-	  
+3) verify connection
+	TRDI:
+		- TRDIterm  <path to special file>
+			- ^C to wake up instrument
+			- cz to send instrument back to sleep
+		- potential problems:
+			- wrong special file
+			- wrong serial comms settings (*)
+			- no power
+			- bad cable
+			- bad instrument
+		- dealing with wrong comms settings (*)
+			- use TRDIcomms <special file> to determine
+			  comms params in use by instrument
+			- use TRDIterm <special file> and cycle through
+			  baud rates with ^B until you get "Instrument 0
+			  (9600bps)" as output; ck to store new baud
+			  rate; cz to send instrument to sleep; ^D to
+			  end TRDIterm
+	Nortek:
+		- ping <ip address>
+		- potential problems:
+			- bad network setup on acquisition computer
+			- no power
+			- bad cable
+			- bad instrument			
+			
 4) add the special-files and serial numbers to [CRUISE_SETUP.expect]
 	- can change other settings, too
 
-5) test everything by running "reset2" and "dir2"
+4) create/update the file [CRUISE_SETUP.expect]
+	- file resides in main acquisition directory
+	- at least comms ports and command file names must be specified
+
+5) test setup
+	- Ldir shows memory contents of ADCPs
+	- red color: PRIMARY instrument (sends sync pulse; usually: downlooker)
+	- blue color: SECONDARY instrument (receives sync pulse: usually: uplooker)
 
 ----------------------------------------------------------------------
 
 =Operator Scripts=
 
-NB: Before using any of the operator scripts, edit [CRUISE_SETUP.expect] to
-    set cruise-specific parameters.
-
-NB: the search path must be set up to include the directory of the
+Notes:
+ 1) Before using any of the operator scripts, edit [CRUISE_SETUP.expect]
+    to set cruise-specific parameters.
+ 2) The shell search path must be set up to include the directory of the
     operator scripts. It is NOT possible, to use the operator scripts
-    with full pathnames (e.g. ./reset2)
+    with full pathnames (e.g. ./Ldir).
+ 3) For dual-head LADCP systems, red color output is used for the PRIMARY
+    and blue is used for the SECONDARY instrument, as defined in
+    [CRUISE_SETUP.expect].
 
-Ldir
-Lerase
 
-Ldownload
+The following three scripts are required for LADCP data acquisition:    
 
-Ldownload_sequential
+  Lstart [stn.cast]
+	This command wakes the instruments, lists their memory contents,
+	clears the memory (after operator confirmation) and programs the
+	instruments to start pinging by uploading command files. CTD
+	station and cast numbers must be provided by the operator since
+	the LADCP files use an independent numbering scheme (profile
+	numbers). Sequentially increasing profile numbers are chosen
+	automatically and reported on screen. When a new profile is
+	started, a subdirectory with its profile number is created under
+	DATA_DIRECTORY. If no station/cast information is provided on
+	the command-line, the operator is prompted for that information.
 
-Lcheck [profnum]
-	- no ADCPs required
+  Ldownload
+	This command interrupts the running data acquisition, downloads
+	the data and backs up the data files to an external or network
+	drive. 
 
-Lreset
-Lstart [stn.cast]
+  Lcheck [profnum]
+  	This command creates softlinks to the ADCP data files in the
+	DATA_DIRECTORY, using the CTD station/cast numbering for the
+	link names. It then integrates the measured vertical velocities
+	from the ADCPs to estimate the zmax and zend diagnostic
+	parameters, which are displayed together with other useful
+	profile statistics before the data files are backed up (again)
+	on the network drive. If no profile number is provided on the
+	command line, the most recently downloaded profile is chosen. No
+	connection to the ADCPs is required to run this command.
+	
 
-ladcp_send_cmd <tty port> <cmd-file>
-			send command file to LADCP connected to specific
-			port; this is the command that can be used to
-			start a cast on a dual-headed instrument
-			connected to a switchbox
+The following utilities are unnecessary but sometimes useful:	
+
+  Ldir
+  	This command lists the memory contents of the ADCPs.
+  	
+  Lerase
+  	This command first lists, then erases (after prompting the
+	operator) the memory contents of the ADCPs.
+
+
+The following commands are useful in case of some problems:	
+
+  Ldownload_sequential
+  	This command is identical to Ldownload but does not start
+	parallel downloads on the two instruments. It is primarily
+	useful for tracing difficult comms problems.
+
+  Lreset
+  	In dual-headed systems, sometimes TRDI ADCPs can enter a state
+	where they won't react to the standard wakeup sequence. In this
+	case, Lreset can often be used to return the instruments back to
+	a responsive state. (Sometimes Lreset produces errors even
+	though it has accomplished its mission.)
 
 ----------------------------------------------------------------------
 
 =Interrupted Downloads=
 
 When a parallel download from the two TRDI ADCPs times out or is
-aborted for some reason, the instrumnents may be in a state where they
+aborted for some reason, the instruments may be in a state where they
 don't respond to the regular command sequences. The following sequence
 of commands usually works:
 
@@ -103,37 +194,26 @@ of commands usually works:
 	the instrument into a state where they respond again.
 3. Ldir
 	If this command fails again, redo steps 2 and 3. If problems
-	persist there likely is a different problem.
+	persist there likely is a different issue.
 
 ----------------------------------------------------------------------
 
-=Colors=
+=Other Problems=
 
-- for dual-headed systems, color is determined by the serial numbers
-  listed in [CRUISE_SETUP.expect]: red for the master and blue for the
-  slave;
-
-- this can be different to the colors if [bbabble] is used directly,
-  because [bbabble] does not know anything about the instruments;
-
-----------------------------------------------------------------------
-
-=Problems=
-
-- if downloading is to be restarted the RDI files have to be deleted
-  manually;
+- before downloading is to be restarted any prior partially downloaded
+  data files may have to be deleted manually
 
 - all files are downloaded to the directory corresponding to the last
-  deployment name; if there are data from multiple casts present in
+  deployment; if there are data from multiple casts present in
   an instrument, they have to be copied to the correct directories
-  manually;
+  manually after downloading
 
 ----------------------------------------------------------------------
 
-=TTY Utilities=
+=TRDI TTY Utilities=
 
-[bbabble]		bbtalk replacement
+[TRDIterm]		terminal emulation program for communicating
+			with TRDI ADCPs (bbtalk replacement)
 [ttycat]		read from TTY, write to STDOUT (e.g. for logging GPS
-			data streams)
-[send_break]		send BREAK to TTY
-[find_comms_params]	cycle through comms params to determine baud rate &c
+			data streams; also used by [TRDIcomms])
+[TRDIcomms]		cycle through comms params to determine baud rate &c

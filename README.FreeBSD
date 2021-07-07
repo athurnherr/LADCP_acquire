@@ -1,13 +1,13 @@
 ======================================================================
                     R E A D M E . F R E E B S D 
                     doc: Thu Jan 19 09:43:38 2006
-                    dlm: Fri Dec 10 15:23:45 2010
+                    dlm: Wed Jul  7 15:12:01 2021
                     (c) 2006 A.M. Thurnherr
-                    uE-Info: 96 7 NIL 0 0 72 3 2 4 NIL ofnI
+                    uE-Info: 29 9 NIL 0 0 72 3 2 4 NIL ofnI
 ======================================================================
 
 This file contains FreeBSD-specific notes for installing and running
-bbabble and the LDEO LADCP operator scripts.
+TRDIterm and the LDEO LADCP operator scripts.
 
 ======================================================================
 PREREQUISITE SOFTWARE
@@ -26,7 +26,7 @@ If there is an error, a threaded perl has to be installed (possibly by
 local compilation).
 
 If the perl executable does not reside in /usr/bin, the 1st line of
-[bbabble] has to be modified. 
+[TRDIterm] has to be modified. 
 
 
 ------
@@ -38,7 +38,7 @@ test it, run
 
 gcc -E /usr/include/stdio.h > /dev/null
 
-If you don't have gcc installed you'll have to modify [bbabble]. This is
+If you don't have gcc installed you'll have to modify [TRDIterm]. This is
 for perl/system programming experts only.
 
 
@@ -48,9 +48,7 @@ for perl/system programming experts only.
 
 lrb is the receiver-component of a public-domain implementation of the
 ymodem protocol called lrzsz. It can be downloaded from
-http://www.ohse.de/uwe/software/lrzsz.html. However, since the version
-has not changed since December 1998 (version 0.12.20) the corresponding
-tar file (lrzsz-0.12.20.tar.gz) is included in this directory.
+http://www.ohse.de/uwe/software/lrzsz.html. 
 
 In order to test whether lrb is already installed, run
 
@@ -79,24 +77,6 @@ If expect does not reside in /usr/bin, you'll have to edit all the
 operator scripts (grep -l /usr/bin/expect *).
 
 
--------------------
-5. mkProfile/scanbb
--------------------
-
-mkProfile is part of the LADCP_perl-tools collection available
-from the LDEO LADCP repository. 
-
-scanbb is part of Eric Firing's LADCP processing software, which is
-available from http://moli.soest.hawaii.edu/software/ladcp. While
-binary versions are available for a variety of systems, FreeBSD is not
-one of them (although the linux binary may work). Compilation is
-non-trivial and requires hacking of the source.
-
-If neither mkProfile nor scanbb are available, LADCP-data-file checking
-can be disabled by modifying the procedure check_data in
-[CRUISE_SETUP.expect]. This is not recommended, however.
-
-
 ======================================================================
 TTY DEVICE NAMES
 ======================================================================
@@ -105,6 +85,6 @@ Each serial port on a FreeBSD system is associated with two separate
 tty special files, e.g. /dev/ttyd0 and /dev/cuad0 in case of the first
 built-in RS-232 port (com1 to those from underprivileged backgrounds).
 ONLY THE CALLOUT VERSION (/dev/cu*) CAN BE USED. THE NON-CALLOUT VERSION
-(/dev/tty*) WILL CAUSE bbabble TO BLOCK ON STARTUP WITHOUT ANY ERROR
+(/dev/tty*) WILL CAUSE TRDIterm TO BLOCK ON STARTUP WITHOUT ANY ERROR
 MESSAGE! 
 

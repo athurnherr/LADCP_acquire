@@ -1,0 +1,68 @@
+#======================================================================
+#                    C R U I S E _ S E T U P . E X P E C T 
+#                    doc: Sun Mar  7 15:45:53 2021
+#                    dlm: Wed Jul  7 15:07:00 2021
+#                    (c) 2021 A.M. Thurnherr
+#                    uE-Info: 35 21 NIL 0 0 72 2 2 8 NIL ofnI
+#======================================================================
+
+#--------
+# HISTORY
+#--------
+
+# Mar  7, 2021: - created from LADCP_acquire V1.5
+# Jul  7, 2021: - got ready for release
+
+#-----------
+# TWEAKABLES
+#-----------
+
+# acquire2 needs to know how to communicate with the ADCPs. TTY special
+# files (for TRDI Worhorses) and IP addresses (for Nortek Signatures)
+# are supported. Note that you need the "dial-up" version of the serial
+# device file, which on MacOSX is usually /dev/cu*. For single-headed
+# systems, leave SECONDARY_COMMS undefined. In order to ensure that
+# the special file names are consistent, plug in the USB-to-serial
+# converters before booting the computer. 
+
+set PRIMARY_COMMS	{/dev/cu.usbserial-FTANPWEK}
+set SECONDARY_COMMS	{/dev/cu.usbserial-FTANPWZR}
+
+# Before deployment, every ADCP head has to be programmed by sending it
+# a corresponding command file, defined by the following variables. If only
+# a single head is connected, the slave_* variable is ignored. Note that
+# different command files are required for TRDI ADCPs with or without the
+# WM15 firmware mode.
+
+set PRIMARY_SETUP	{TRDI_primary.cmd};
+set SECONDARY_SETUP	{TRDI_secondary.cmd};
+
+# 2-character labels, usually UL for the upward-pointing instrument and
+# DL for the downward-pointing instrument.
+
+set PRIMARY_FILE_LBL	{DL}
+set SECONDARY_FILE_LBL	{UL}
+
+# The following directory is used to store command files, instrument
+# configurations and ADCP data. Separate subdirectories are used for each
+# profile.
+
+set DATA_DIRECTORY 	{../Data/raw};
+
+# Both after data downloading has finished (Ldownload) and after the
+# data files have been checked (Lcheck) the entire data directory is
+# copied to BACKUP_DIRECTORY. Make sure that this directory resides
+# on a different disk than DATA_DIRECTORY, ideally on a network drive.
+# Setting this variable to an empty string disables backing up of
+# the data files (not a good idea!).
+
+set BACKUP_DIRECTORY 	{/Volumes/cruiseshare/LADCP/raw};
+
+# By default, TRDIterm will look for standard UN*X ymodem receive
+# programs (rb and lrb) and call the first one it finds with the
+# -u option. If neither of the standard programs exist, if neither is in the
+# current $PATH, or if non-standard options have to be passed the following
+# variable can be set to a non-empty string, such as {/sw/bin/rb -u}
+
+set YMODEM_RECEIVER 	{}
+

@@ -1,10 +1,10 @@
 #!/usr/bin/expect -f
 #======================================================================
-#                    F I N D _ C O M M S _ P A R A M S 
+#                    T R D I C O M M S 
 #                    doc: Mon Mar  8 02:57:35 2004
-#                    dlm: Tue Oct  3 12:41:59 2006
+#                    dlm: Wed Jul  7 15:22:30 2021
 #                    (c) 2004 A.M. Thurnherr
-#                    uE-Info: 83 0 NIL 0 0 72 2 2 8 NIL ofnI
+#                    uE-Info: 50 0 NIL 0 0 72 2 2 8 NIL ofnI
 #======================================================================
 
 proc try {ttydev speed parity data stop} {
@@ -20,6 +20,7 @@ proc try {ttydev speed parity data stop} {
 
 	send_user [format "trying %6d baud --- %s/%d/%d..." $speed $parity $data $stop];
 	spawn ttycat -B -b $speed $pflag -d $data -s $stop $ttydev;
+	sleep 1
 	expect {
 		timeout {
 			exec kill [exp_pid];
@@ -44,6 +45,10 @@ if {$argc != 1} {
 }
 set ttydev [lindex $argv 0];
 
+try $ttydev   9600 "N" 8 1;
+try $ttydev   9600 "E" 7 1;
+try $ttydev   9600 "O" 7 1;
+
 try $ttydev    300 "N" 8 1;
 try $ttydev    300 "E" 7 1;
 try $ttydev    300 "O" 7 1;
@@ -59,10 +64,6 @@ try $ttydev   2400 "O" 7 1;
 try $ttydev   4800 "N" 8 1;
 try $ttydev   4800 "E" 7 1;
 try $ttydev   4800 "O" 7 1;
-
-try $ttydev   9600 "N" 8 1;
-try $ttydev   9600 "E" 7 1;
-try $ttydev   9600 "O" 7 1;
 
 try $ttydev  19200 "N" 8 1;
 try $ttydev  19200 "E" 7 1;

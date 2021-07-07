@@ -1,9 +1,9 @@
 ======================================================================
                     R E A D M E . M A C O S X 
                     doc: Thu Jan 19 09:43:38 2006
-                    dlm: Fri Dec 10 15:25:26 2010
+                    dlm: Wed Jul  7 15:14:11 2021
                     (c) 2006 A.M. Thurnherr
-                    uE-Info: 84 0 NIL 0 0 72 3 2 4 NIL ofnI
+                    uE-Info: 88 43 NIL 0 0 72 3 2 4 NIL ofnI
 ======================================================================
 
 This file contains MacOSX-specific notes for installing and running the
@@ -13,8 +13,7 @@ LDEO LADCP operator scripts.
 PREREQUISITE SOFTWARE
 ======================================================================
 
-NOTE: It it necessary to have the developer tools installed (supplied
-on DVD with new computer).
+NOTE: It it necessary to have the developer tools installed.
 
 -------
 1. perl
@@ -25,7 +24,7 @@ developer tools --- I am not sure). In order to test it, run
 
 /usr/bin/perl -e 'use threads'
 
-If perl is not in /usr/bin, the 1st line of [bbabble] has to be
+If perl is not in /usr/bin, the 1st line of [TRDIterm] has to be
 modified. 
 
 
@@ -38,7 +37,7 @@ test it, run
 
 gcc -E /usr/include/stdio.h > /dev/null
 
-If you don't have gcc installed you'll have to modify [bbabble]. This is
+If you don't have gcc installed you'll have to modify [TRDIterm]. This is
 for perl/system programming experts only.
 
 
@@ -48,9 +47,7 @@ for perl/system programming experts only.
 
 lrb is the receiver-component of a public-domain implementation of the
 ymodem protocol called lrzsz. It can be downloaded from
-http://www.ohse.de/uwe/software/lrzsz.html. However, since the version
-has not changed since December 1998 (version 0.12.20) the corresponding
-tar file (lrzsz-0.12.20.tar.gz) is included in this directory.
+http://www.ohse.de/uwe/software/lrzsz.html.
 
 In order to test whether lrb is already installed, run
 
@@ -77,20 +74,6 @@ developer tools --- I am not sure). In order to test it, run
 If expect does not reside in /usr/bin, you'll have to edit all the
 operator scripts (grep -l /usr/bin/expect *).
 
--------------------
-5. mkProfile/scanbb
--------------------
-                                                                        
-mkProfile is part of the LADCP_perl-tools collection available
-from the LDEO LADCP repository.
-
-scanbb is part of Eric Firing's LADCP processing software, which is
-available from http://moli.soest.hawaii.edu/software/ladcp.
-
-If neither mkProfile nor scanbb are available, LADCP-data-file checking
-can be disabled by modifying the procedure check_data in
-[CRUISE_SETUP.expect]. This is not recommended, however.
-
 ======================================================================
 TTY DEVICE NAMES
 ======================================================================
@@ -102,12 +85,11 @@ appear in /dev only only when the adapter is connected, i.e. you can
 find the device names by  comparing the contents of /dev with and
 without the adapter connected.
 
-In case of the KeySpan adapters that we are using at Lamont, each
-serial line has two associated /dev entries: /dev/tty.* and /dev/cu.*
---- ONLY /dev/cu.* WORKS!!! With the current driver version, the first
-device is called /dev/cu.KeySerial1, but the second one has a
-"geographical" (containing bus number, &c) name, such as
-/dev/cu.USA49W3b13P2.2. The name depends on where it is plugged in,
-i.e. [CRUISE_SETUP.expect] MAY HAVE TO BE MODIFIED AFTER RE-CONNECTING
-THE USB CABLE(S).
+In case of the KeySpan adapters for example, each serial line has two
+associated /dev entries: /dev/tty.* and /dev/cu.* --- ONLY /dev/cu.*
+WORKS!!! With the current driver version, the first device is called
+/dev/cu.KeySerial1, but the second one has a "geographical" (containing
+bus number, &c) name, such as /dev/cu.USA49W3b13P2.2. The name depends
+on where it is plugged in, i.e. [CRUISE_SETUP.expect] MAY HAVE TO BE
+MODIFIED AFTER RE-CONNECTING THE USB CABLE(S).
 
