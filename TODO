@@ -1,0 +1,12 @@
+======================================================================
+                    T O D O 
+                    doc: Tue Jun 29 10:54:52 2021
+                    dlm: Tue Jun 29 10:55:01 2021
+                    (c) 2021 A.M. Thurnherr
+                    uE-Info: 9 17 NIL 0 0 72 0 2 8 NIL ofnI
+======================================================================
+
+0) test TRDIcomms
+1) add command files (with and w/o WM15)
+2) add CRUISE_SETUP.expect
+3) publish
