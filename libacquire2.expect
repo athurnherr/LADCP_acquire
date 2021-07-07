@@ -1,9 +1,9 @@
 #======================================================================
 #                    L I B A C Q U I R E 2 . E X P E C T 
 #                    doc: Sun Mar  7 19:18:09 2021
-#                    dlm: Wed Mar 10 15:23:10 2021
+#                    dlm: Wed Mar 31 11:32:15 2021
 #                    (c) 2021 A.M. Thurnherr
-#                    uE-Info: 13 29 NIL 0 0 72 0 2 4 NIL ofnI
+#                    uE-Info: 425 94 NIL 0 3 72 0 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -11,6 +11,11 @@
 #	Mar  8, 2021: - improved
 #	Mar  9, 2021: - improved
 #	Mar 10, 2021: - made work
+#	Mar 19, 2021: - improved
+#	Mar 22, 2021: - increased expect buffer (match_max) to allow
+#					completion of background download
+#	Mar 28, 2021: - typo in check_data (Nortek)
+#	Mar 31, 2021: - added support for linked data files
 
 #======================================================================
 # User-Interation Routines
@@ -52,11 +57,11 @@ proc input_stncast {prompt} {								# input a station.cast number
 	while {1} {
 		send_user $prompt;
 		expect_user {
-			-timeout -1 -re {^[0-9\.]+\n} {
+			-timeout -1 -re {^[0-9]+\.[0-9]+\n} {
 				regsub {^0*} $expect_out(0,string) {} stncast_val;
 				return $stncast_val;
 			}
-			-timeout -1 -re {.+} {send_user "only numbers and periods, please!\n"}
+			-timeout -1 -re {.+} {send_user "Valid Format: Stn.Cast (e.g. 1.1)\n"}
 		}
 	}
 }
@@ -106,7 +111,7 @@ proc error {msg} {											# print colorful error message & exit
 #======================================================================
 
 proc init_acquire {} {										# load  libraries and setup
-	global DATA_DIRECTORY;
+	global DATA_DIRECTORY; global BACKUP_DIRECTORY;			# NB: all global variables must be defined here
 	global PRIMARY_COMMS; global SECONDARY_COMMS; 
 	global PRIMARY_SETUP; global SECONDARY_SETUP; 
 	global PRIMARY_FILE_LBL; global SECONDARY_FILE_LBL; 
@@ -176,6 +181,52 @@ proc wakeup_instruments {} {										# wake up instruments
 	}
 }
 
+proc wakeup_primary {} {	
+	global PRIMARY_COMMS;
+	global SECONDARY_COMMS; 
+
+	select_instrument 0;
+	if {[regexp {^/dev/} $PRIMARY_COMMS]} {
+		wakeup_TRDI;
+	} else {
+		wakeup_Nortek;
+	}
+}
+
+proc wakeup_secondary {} {	
+	global PRIMARY_COMMS;
+	global SECONDARY_COMMS; 
+
+	if {[info exists SECONDARY_COMMS]} {
+		select_instrument 1;
+		if {[regexp {^/dev/} $SECONDARY_COMMS]} {
+			wakeup_TRDI;
+		} else {
+			wakeup_Nortek;
+		}
+	}
+}
+
+proc wakeup_instruments_reverse {} {								# wake up instruments in reverse order
+	global PRIMARY_COMMS;
+	global SECONDARY_COMMS; 
+
+	if {[info exists SECONDARY_COMMS]} {
+		select_instrument 1;
+		if {[regexp {^/dev/} $SECONDARY_COMMS]} {
+			wakeup_TRDI;
+		} else {
+			wakeup_Nortek;
+		}
+	}
+	select_instrument 0;
+	if {[regexp {^/dev/} $PRIMARY_COMMS]} {
+		wakeup_TRDI;
+	} else {
+		wakeup_Nortek;
+	}
+}
+
 
 proc shutdown_instruments {} {										# suspend instruments
 	global PRIMARY_COMMS;
@@ -187,6 +238,32 @@ proc shutdown_instruments {} {										# suspend instruments
 	} else {
 		shutdown_Nortek;
 	}
+	if {[info exists SECONDARY_COMMS]} {
+		select_instrument 1;
+		if {[regexp {^/dev/} $SECONDARY_COMMS]} {
+			shutdown_TRDI;
+		} else {
+			shutdown_Nortek;
+		}
+	}
+}
+
+proc shutdown_primary {} {	
+	global PRIMARY_COMMS;
+	global SECONDARY_COMMS; 
+
+	select_instrument 0;
+	if {[regexp {^/dev/} $PRIMARY_COMMS]} {
+		shutdown_TRDI;
+	} else {
+		shutdown_Nortek;
+	}
+}
+
+proc shutdown_secondary {} {
+	global PRIMARY_COMMS;
+	global SECONDARY_COMMS; 
+
 	if {[info exists SECONDARY_COMMS]} {
 		select_instrument 1;
 		if {[regexp {^/dev/} $SECONDARY_COMMS]} {
@@ -306,4 +383,47 @@ proc load_factory_defaults {} {
 		}
 	}
 }
+
+
+proc check_data {cast_dir profnum} {
+	global PRIMARY_COMMS; global SECONDARY_COMMS;
+	global PRIMARY_FILE_LBL; global SECONDARY_FILE_LBL;
+
+	set_color 0;
+	if {[regexp {^/dev/} $PRIMARY_COMMS]} {
+		check_data_TRDI $cast_dir $profnum $PRIMARY_FILE_LBL;
+	} else {
+		check_data_Nortek $cast_dir $profnum $PRIMARY_FILE_LBL;
+	}
+	if {[info exists SECONDARY_COMMS]} {
+		set_color 1;
+		if {[regexp {^/dev/} $SECONDARY_COMMS]} {
+			check_data_TRDI $cast_dir $profnum $SECONDARY_FILE_LBL;
+		} else {
+			check_data_Nortek $cast_dir $profnum $SECONDARY_FILE_LBL;
+		}
+	}
+}
+
+
+proc backup_data {cast_dir profnum} {
+	global BACKUP_DIRECTORY DATA_DIRECTORY;
+
+	set_color;
+	if {![file isdirectory $cast_dir]} {
+		send_error "\n$cast_dir: no such file or directory\n";
+		exit 1;
+    }
+	if {[string length $BACKUP_DIRECTORY] == 0} {
+		send_user "\nWARNING: no backup directory specified\n";
+		return;
+    }
+	if {![file isdirectory $BACKUP_DIRECTORY]} {
+		send_error "\n$BACKUP_DIRECTORY: no such file or directory\n";
+		exit 1;
+    }
+	exec rsync -az $DATA_DIRECTORY/ $BACKUP_DIRECTORY;	# / after $DATA_DIRECTORY is important
+}
+
+
 

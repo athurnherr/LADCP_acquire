@@ -2,9 +2,9 @@
 #======================================================================
 #                    L I B N O R T E K . E X P E C T 
 #                    doc: Sun Mar  7 19:15:29 2021
-#                    dlm: Wed Mar 10 15:17:02 2021
+#                    dlm: Mon Mar 22 06:07:28 2021
 #                    (c) 2021 A.M. Thurnherr
-#                    uE-Info: 124 45 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 108 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -105,9 +105,6 @@ proc shutdown_Nortek {} {								# send instrument to sleep
 	}
 }
 
-proc ensure_shutdown_Nortek {} {						# send instrument to sleep...
-	send "POWERDOWN\r";
-}
 
 proc download_Nortek {comms} {							# download data using wget
 	global cid;
@@ -214,4 +211,9 @@ proc load_factory_defaults_Nortek {} {					# set default params
 		-timeout 2 "ERROR" { print_error_Nortek; }
     }
 }
+
+proc check_data_Nortek {cast_dir profnum lbl} {			# calculate zmax/zend
+	send_user "Nortek data files cannot be checked automatically yet\n"
+}
+
 

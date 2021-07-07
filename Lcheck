@@ -1,0 +1,48 @@
+#!/usr/bin/expect -f
+#======================================================================
+#                    L C H E C K 
+#                    doc: Fri Mar 19 04:50:30 2021
+#                    dlm: Wed Mar 31 06:21:40 2021
+#                    (c) 2021 A.M. Thurnherr
+#                    uE-Info: 15 55 NIL 0 0 72 2 2 4 NIL ofnI
+#======================================================================
+
+# HISTORY:
+#	Mar 19, 2021: - created from old checkfiles2
+#	Mar 22, 2021: - added profnum optional argument
+#	Mar 31, 2021: - BUG: profnum 036 was interpreted as octal
+#				  - BUG: extraneous line in output
+#				  - added support for linked data files
+
+source [regsub {Ldir} [exec which Ldir] {libacquire2.expect}];
+
+log_user 0;
+init_acquire;
+
+if {$argc == 0} {                                           # collect CTD info (stn.cast)
+	if {![file isfile .last_LADCP]} {							# set LADCP profile id
+		send_error ".last_LADCP: no such file or directory\n"
+		exit 1
+	}
+	set profnum [scan [exec cat .last_LADCP] %d];
+} else {
+	set profnum [scan [lindex $argv 0] %d];						# without scan, 036 is interpreted as octal
+}
+
+send_user "LADCP profile number = $profnum";
+
+set cast_dir [format "%s/%03d" $DATA_DIRECTORY $profnum];		# sanity check
+if {![file isdirectory $cast_dir]} {
+	send_error "$cast_dir: no such file or directory\n";
+	exit 1;
+}
+
+send_user "\nChecking data files...\n";
+check_data $cast_dir $profnum;
+
+set_color;
+send_user "Backing up data files...";
+backup_data $cast_dir $profnum;
+
+send_user "\nDone\n"
+

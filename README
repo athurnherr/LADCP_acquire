@@ -1,20 +1,20 @@
 #======================================================================
 #                    R E A D M E 
 #                    doc: Sat Mar 20 23:10:10 2004
-#                    dlm: Mon Oct 18 12:55:18 2010
+#                    dlm: Mon Mar 22 08:03:59 2021
 #                    (c) 2004 A.M. Thurnherr
-#                    uE-Info: 63 8 NIL 0 0 72 3 2 8 NIL ofnI
+#                    uE-Info: 78 27 NIL 0 0 72 3 2 8 NIL ofnI
 #======================================================================
 
 =Introduction=
 
 The LADCP_acquire software implements LADCP data acquisition on UN*X
-systems (e.g. Linux, MacOSX, FreeBSD, etc.). It consists of the bbabble
-program, a portable bbtalk replacement written in perl, as well as a
+systems (e.g. Linux, MacOSX, FreeBSD, etc.). It consists of the TRDIterm
+program, a portable terminal emulation written in perl, as well as a
 number of "operator scripts", written in expect. The main purpose of
 the software is to provide a comfortable and "operator-error-tolerant"
 command-line environment for data acquisition from single- and dual-head
-LADCP systems built using Teledyne/RDI heads.
+LADCP systems built using Teledyne/RDI and Nortek ADCPs.
 
 The documentation assumes familiarity with UN*X and LADCP data
 acquisition. (If you do not know what a UN*X "special file" is or have
@@ -29,7 +29,8 @@ flavors see [README.*] files (e.g. [README.Linux]).
 =Connecting ADCP Heads to Acquisitions Computer=
 
 1) physically connect the instruments
-	- many USB-to-serial adapters do not work; we use Keyspan adapters
+	- NB: not all USB-to-serial adapters are capable of sending
+	      BREAK signals. 
 
 2) determine the special files of the serial ports the instruments are
    connected to:
@@ -66,18 +67,18 @@ NB: the search path must be set up to include the directory of the
     operator scripts. It is NOT possible, to use the operator scripts
     with full pathnames (e.g. ./reset2)
 
-NB: scripts ending in 1 are for use in a single-headed system; scripts
-    ending in 2 are for use in a dual-headed system.
+Ldir
+Lerase
 
-reset1/reset2		wake up & reset instruments
-dir1/dir2		list recorder directories
-erasemem1/erasemem2	clear recorder memory
-interact1/interact2	enter interactive mode (similar to BBTALK)
-ladcp1/ladcp2		start new cast (upload command file & start pinging)
-abort1/abort2		abort started cast (rename cast directory)
-endladcp1/endladcp2	end cast (stop pinging & download data)
-checkfiles1/checkfiles2	post-process data after download ok (check and
-			backup data files)
+Ldownload
+
+Ldownload_sequential
+
+Lcheck [profnum]
+	- no ADCPs required
+
+Lreset
+Lstart [stn.cast]
 
 ladcp_send_cmd <tty port> <cmd-file>
 			send command file to LADCP connected to specific
@@ -85,16 +86,24 @@ ladcp_send_cmd <tty port> <cmd-file>
 			start a cast on a dual-headed instrument
 			connected to a switchbox
 
-print_version		print version of acquire scripts
-
 ----------------------------------------------------------------------
 
-=Aborting/Restarting Casts=
+=Interrupted Downloads=
 
-After a cast has been started with ladcp1/2 it can be aborted with
-abort1/2. This renames the cast sub-directory that is created by
-ladcp1/2. However, it does not erase the memory on the ADCP. This has to
-be accomplished manually with erasemem1/2.
+When a parallel download from the two TRDI ADCPs times out or is
+aborted for some reason, the instrumnents may be in a state where they
+don't respond to the regular command sequences. The following sequence
+of commands usually works:
+
+1. Ldir
+	This command often fails with a timeout error, suggesting that
+	there may not be bench power even though there is.
+2. Lreset
+	This command often also fails with a timeout error but it gets
+	the instrument into a state where they respond again.
+3. Ldir
+	If this command fails again, redo steps 2 and 3. If problems
+	persist there likely is a different problem.
 
 ----------------------------------------------------------------------
 

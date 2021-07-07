@@ -1,20 +1,16 @@
 #!/usr/bin/expect -f
 #======================================================================
-#                    L D O W N L O A D 
+#                    L D O W N L O A D _ S E Q U E N T I A L 
 #                    doc: Sun Mar  7 16:18:07 2021
-#                    dlm: Sun Apr  4 04:37:33 2021
+#                    dlm: Wed Mar 31 06:27:11 2021
 #                    (c) 2021 A.M. Thurnherr
-#                    uE-Info: 17 65 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 83 30 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
-#  	Mar 10, 2021: - created 
-#	Mar 19, 2021: - added profile number to output
-#	Mar 22, 2021: - BUG: "background" download of large files blocks
-#				  - colors don't work with parallel download => disabled
+#	Mar 22, 2021: - created
 #	Mar 31, 2021: - BUG: profnum 036 was interpreted as octal
 #				  - added support for linked data files
-#	Apr  4, 2021: - BUG: moved instrument shutdown into wait4_...
 
 source [regsub {Ldir} [exec which Ldir] {libacquire2.expect}];
 
@@ -42,8 +38,7 @@ if {$memory_empty} {
 	set cid -1;
 	error "No data in either instrument!";
 }
-	
-															# move pre-existing data files 
+
 if {[llength [glob -nocomplain [format {%s/*.[0-9][0-9][0-9]} $cast_dir]]] > 0} {
 	set attempt 1;
 	while {[file isdirectory [format %s/saved_data_%d $cast_dir $attempt]]} {
@@ -55,37 +50,32 @@ if {[llength [glob -nocomplain [format {%s/*.[0-9][0-9][0-9]} $cast_dir]]] > 0} 
 	exec sh -c "mv [format {%s/*.[0-9][0-9][0-9]} $cast_dir] $saved_dir";
 }
 
+shutdown_secondary;											# wake up later
+	
 send_user "\nDownloading Data...";							# download data
 
-if {[info exists SECONDARY_COMMS] && \
-	[regexp {^/dev/} $PRIMARY_COMMS] && \
-	[regexp {^/dev/} $SECONDARY_COMMS]} {					# dual head TRDI system => parallel download
-		select_instrument 0; set_color; start_download_TRDI;
-		select_instrument 1; set_color; start_download_TRDI;
-		set_color;
-		log_user 1;
-		wait4_download_finish_twoTRDIs;
-} else {													# sequential downloads
-	if {![regexp {^/dev/} $PRIMARY_COMMS]} {				# first, Norteks
-		select_instrument 0;
-		download_Nortek $PRIMARY_COMMS;
-	}
-	if {[info exists SECONDARY_COMMS] && \
-		![regexp {^/dev/} $SECONDARY_COMMS]} {
+if {[regexp {^/dev/} $PRIMARY_COMMS]} {						# TRDI
+	select_instrument 0;
+	start_download_TRDI;
+	wait4_download_finish_TRDI;
+} else {													# Nortek
+	select_instrument 0;
+	download_Nortek $PRIMARY_COMMS;
+}
+
+shutdown_primary;
+
+if {[info exists SECONDARY_COMMS]} {
+	wakeup_secondary;
+	if {[regexp {^/dev/} $SECONDARY_COMMS]} { 				# TRDI
+		select_instrument 1;
+		start_download_TRDI;
+		wait4_download_finish_TRDI;
+	} else {												# Nortek
 		select_instrument 1;
 		download_Nortek $SECONDARY_COMMS;
 	}
-	if {[regexp {^/dev/} $PRIMARY_COMMS]} {					# finally, the single TRDI
-		select_instrument 0;
-		start_download_TRDI; log_user 1;
-		wait4_download_finish_TRDI;
-	}
-	if {[info exists SECONDARY_COMMS] && \
-		[regexp {^/dev/} $SECONDARY_COMMS]} {
-		select_instrument 1;
-		start_download_TRDI; log_user 1;
-		wait4_download_finish_TRDI;
-	}
+	shutdown_secondary;
 }
 
 set_color;

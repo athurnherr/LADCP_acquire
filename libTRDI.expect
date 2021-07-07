@@ -2,17 +2,22 @@
 #======================================================================
 #                    L I B T R D I . E X P E C T 
 #                    doc: Sun Mar  7 19:15:29 2021
-#                    dlm: Wed Mar 10 15:22:31 2021
+#                    dlm: Sun Apr  4 04:36:55 2021
 #                    (c) 2021 A.M. Thurnherr
-#                    uE-Info: 15 32 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 20 56 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
-
 
 # HISTORY:
 #   Mar  7, 2021: - created
 #	Mar  8, 2021: - improved
 #	Mar  9, 2021: - improved
 #	Mar 10, 2021: - made it work
+#	Mar 19, 2021: - added TRDI_check_data
+#	Mar 25, 2021: - BUG: timeout -i (nonsensical)
+#	Mar 31, 2021: - BUG: check_data did not check for existence of file
+#				  - added linking to ctd stn.cast in check_data
+#	Apr  4, 2021: - BUG: parallel timeout produced error when first instrument
+#						 auto-sleeps before 2nd finishes
 
 global TRDI_BREAK;
 global DNLOAD;
@@ -20,7 +25,6 @@ global DNLOAD;
 set NEXT_SPEED	\002;	# ^B							# TRDIterm keyboard commands
 set TRDI_BREAK 	\003;	# ^C
 set HELP	\010;	# ^H
-set TOGGLE	\024;	# ^T
 set DNLOAD	\030;	# ^X
 
 proc gobble_prompts {} {								# gobble old prompts
@@ -113,15 +117,6 @@ proc shutdown_TRDI {} {									# send instrument to sleep
 	}
 }
 
-proc ensure_shutdown_TRDI {} {							# send instrument to sleep...
-	gobble_prompts;										# unless already sleeping
-	send "CZ\r";
-	expect {
-		timeout {error "Can't put Instrument to sleep"}
-		-timeout 5 -re "Powering Down|POWERING DOWN"
-	}
-}
-
 proc start_download_TRDI {} {							# start downloading
 	global DNLOAD cast_dir cid;
 
@@ -148,7 +143,7 @@ proc start_download_TRDI {} {							# start downloading
 }
 
 proc wait4_download_finish_TRDI {} {					# wait for download(s) to finish
-	global BREAK TOGGLE;
+	global BREAK;
 	expect {
 		timeout {error "Download did not finish ok"}
 		-timeout -1 "Transfer complete" {}
@@ -157,6 +152,43 @@ proc wait4_download_finish_TRDI {} {					# wait for download(s) to finish
 		}
 	}
 	expect -timeout 5 ">";
+	log_user 0;
+	set_color;
+}
+
+proc wait4_download_finish_twoTRDIs {} {				# wait for download(s) to finish
+	global BREAK PRIMARY_proc SECONDARY_proc;
+	expect {
+		timeout {error "Download timed out"}
+		-timeout -1 -i $PRIMARY_proc "Transfer complete" {
+			select_instrument 0;
+			shutdown_TRDI;
+			expect {
+				timeout {error "Download from secondary timed out"}
+				-timeout 600 -i $SECONDARY_proc "Transfer complete" {}
+				-timeout 600 -i $SECONDARY_proc "ABNORMALLY" {
+					set_color 1; error "Download from secondary terminated abnormally";
+				}
+			}
+		}
+		-timeout -1 -i $SECONDARY_proc "Transfer complete" {
+			select_instrument 1;
+			shutdown_TRDI;
+			expect {
+				timeout {error "Download from primary timed out"}
+				-timeout 600 -i $PRIMARY_proc "Transfer complete" {}
+				-timeout 600 -i $PRIMARY_proc "ABNORMALLY" {
+					set_color 0; error "Download from primary terminated abnormally";
+				}
+			}
+		}
+		-timeout -1 -i $PRIMARY_proc "ABNORMALLY" {
+			set_color 0; error "Download from primary terminated abnormally";
+		}
+		-timeout -1 -i $SECONDARY_proc "ABNORMALLY" {
+			set_color 1; error "Download from secondary terminated abnormally";
+		}
+	}
 	log_user 0;
 	set_color;
 }
@@ -177,7 +209,8 @@ proc list_dir_TRDI {} {									# list directory & set memory_empty flag
 		-timeout 5 "bytes free";
 	}
 	wait4_prompt;
-	log_user 0; set_color;					
+	log_user 0; send_user "\n";
+	set_color;					
 }
 
 proc erase_memory_TRDI {} {								# erase memory
@@ -254,12 +287,13 @@ proc load_factory_defaults_TRDI {} {						# set default params
 	send "\r"; wait4_prompt;
 	send "CR1\r";
 	expect {
-		timeout {error "Can't get prompt"};
+		timeout { error "Can't get prompt" };
 		-timeout 10 "ERR" {
 			error "command CR1 returned $expect_out(buffer)";
 		}
-		-timeout 10 ">"
-        }
+		-timeout 10 "FACTORY defaults]"
+	}
+	wakeup_TRDI;											# unclear why this is required but it is
 }
 
 proc set_deployment_name_TRDI {{dn UNSET}} {				# set deployment name
@@ -270,26 +304,27 @@ proc set_deployment_name_TRDI {{dn UNSET}} {				# set deployment name
 	wait4_prompt;
 }
 
-proc get_deployment_name_TRDI {} {							# get deployment name
-	global stn_format master_deployment_name_fmt;
-	gobble_prompts;
-	send "\r"; wait4_prompt;
-	send "RN?\r"; sleep 1;
-	expect {
-		timeout {error "Can't get deployment name";}
-		-timeout 1 "ERR" {									# BB150
-			if {![file isfile .last_stn]} {
-				error "Can't find .last_stn";
-			}
-			set stn [exec cat .last_stn];
-			set dn [format $master_deployment_name_fmt $stn];
-			wait4_prompt;
-			return $dn;			
-		}
-		-timeout 5 -re {Current deployment name = ([^\r]*)}
+proc check_data_TRDI {cast_dir profnum lbl} {				# calculate zmax/zend, create ctd station link
+	global DATA_DIRECTORY;
+	set data_file [format "%03d%s000.000" $profnum $lbl];
+	if {![file isfile $cast_dir/$data_file]} {
+		send_error "$cast_dir/$data_file: no such file or directory\n";
+		set_color;
+		exit 1;
 	}
-	set dn $expect_out(1,string);
-	wait4_prompt;
-	return $dn;
+	exec sh -c "mkProfile -Q $cast_dir/$data_file 2> $cast_dir/`basename $data_file .000`.profinfo";
+	exec sh -c "cat $cast_dir/`basename $data_file .000`.profinfo > /dev/tty";
+
+	if {![file isfile $cast_dir/CTD.station]} {
+		send_error "$cast_dir/CTD.station: no such file or directory\n";
+		set_color;
+		exit 1;
+	}
+	scan [exec cat "$cast_dir/CTD.station"] "%d.%d" station cast;
+	set ctd_num_file [format "%03d%02d_%s.PD0" $station $cast $lbl];
+	set link_name [format "%03d/%s" $profnum $data_file];
+	exec sh -c "ln -fs $link_name $DATA_DIRECTORY/$ctd_num_file";
 }
 	
+	
+

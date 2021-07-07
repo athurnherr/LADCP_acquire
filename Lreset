@@ -1,0 +1,23 @@
+#!/usr/bin/expect -f
+#======================================================================
+#                    L R E S E T 
+#                    doc: Sun Mar  7 16:18:07 2021
+#                    dlm: Fri Mar 19 06:02:16 2021
+#                    (c) 2021 A.M. Thurnherr
+#                    uE-Info: 22 15 NIL 0 0 72 2 2 4 NIL ofnI
+#======================================================================
+
+# HISTORY:
+#	Mar 19, 2021: - created
+
+source [regsub {Ldir} [exec which Ldir] {libacquire2.expect}];
+
+log_user 0;
+init_acquire;
+send_user "Connecting...";
+connect_to_instruments;
+wakeup_instruments_reverse;
+set_color -1;
+shutdown_instruments;
+send_user "\n";
+
