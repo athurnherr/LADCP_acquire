@@ -2,9 +2,9 @@
 #======================================================================
 #                    L I B T R D I . E X P E C T 
 #                    doc: Sun Mar  7 19:15:29 2021
-#                    dlm: Thu Mar 16 11:14:53 2023
+#                    dlm: Thu Mar 16 16:34:00 2023
 #                    (c) 2021 A.M. Thurnherr
-#                    uE-Info: 22 64 NIL 0 0 72 2 2 4 NIL ofnI
+#                    uE-Info: 127 0 NIL 0 0 72 2 2 4 NIL ofnI
 #======================================================================
 
 # HISTORY:
@@ -19,7 +19,7 @@
 #	Apr  4, 2021: - BUG: parallel timeout produced error when first instrument
 #						 auto-sleeps before 2nd finishes
 #	Mar 16, 2023: - BUG: memory_empty was falsely set for ADCPs with
-#						 2 cards installed and one of them empty
+#   					 2 cards installed and one of them empty
 
 global TRDI_BREAK;
 global DNLOAD;
@@ -124,9 +124,9 @@ proc start_download_TRDI {} {							# start downloading
 
 	set cwd [pwd];
 	cd $cast_dir;
-
 	gobble_prompts;
 	send "\r"; wait4_prompt;
+
 	send $DNLOAD;
 	expect {
 		timeout { error "Cannot start TRDIterm download"; }
@@ -199,24 +199,22 @@ proc list_dir_TRDI {} {									# list directory & set memory_empty flag
 	global cid;
 	global memory_empty;
 
-	set memory_empty 0;
 	gobble_prompts;
 	send "\r"; wait4_prompt;
+	
 	send "RA\r";
 	expect {
 		timeout {error "Can't get number of deployments"};
-		-timeout 3 "^0" { set memory_empty 1; }
-		-timeout 3 ">"
+		-timeout 3 -re {0} {set memory_empty 1}
+		-timeout 3 -re {[1-9]} {set memory_empty 0}
 	}
 
-	gobble_prompts;
-	send "\r"; wait4_prompt;
 	send "RR\r";
 	set_color $cid; log_user 1;
 	send_user "\n";
 	expect {
 		timout { error "cannot get recorder directory" }
-		-timeout 5 "No files found";
+		-timeout 5 "No files found" {}
 		-timeout 5 "bytes free";
 	}
 	wait4_prompt;
